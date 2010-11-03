@@ -1,5 +1,5 @@
 #!/usr/bin/python
-## BacLog Copyright 2010 by Timothy Middelkoop Dual Licensed GPL 2.0 or later and CPL 1.0 or later.
+## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
 import socket
 import select
