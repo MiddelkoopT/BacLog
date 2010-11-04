@@ -4,18 +4,59 @@
 import socket
 import select
 import binascii
+import struct
+import string
+
+### Magic Packet Class.
+class Packet:
+    def __init__(self):
+        self._name=[]
+        self._format=[]
+        
+        ## VLC
+        self._add('BACnetIP','B',0x81)  # BACnet/IP
+        self._add('UDP','B',0x0a)       # UDP
+        self._add('length','H')         # Packet size
+        ## NPDU
+        self._add('version','B',0x01)   # ASHRAE 135-1995
+        self._add('control','B',0x04)   # Confirmed Request
+        ## APDU header
+        self._add('pdu','B',0x00)       # Confirmed Request Unsegmented
+        self._add('segment','B',0x04)   # Maximum APDU size 1024
+        self._add('id','B',0x00)        # Request ID
+
+        self._packet=struct.Struct('!'+string.join(self._format))
+        self._print()
+        
+    def _add(self,field,format,default=None):
+        self._name.append(field)
+        self._format.append(format)
+        setattr(self, field, default)
+        
+    def _data(self):
+        self.length=self._packet.size ## self defined.
+        values=[]
+        for f in self._name:
+            values.append(getattr(self, f))
+        return self._packet.pack(*values)
+
+    def _print(self):
+        print "Packet>", binascii.b2a_hex(self._data()), self.length
 
 
 def main():
     print "BacLog.main>"
     ## Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
-    message = "810a001101040003010c0c010000141955"
+    #message = binascii.unhexlify("810a001101040003010c0c010000141955")
 
+    p=Packet()
+    message=p._data()
+    
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('192.168.23.53',47808))
     s.setblocking(0)
 
-    send=3
+    send=1
     recv=send
     
     while(send+recv>0):
@@ -27,7 +68,7 @@ def main():
         ## Send
         if sw and send:
             print "BacLog.main> send:", send
-            s.sendto(binascii.unhexlify(message),('192.168.83.100',47808))
+            s.sendto(message,('192.168.83.100',47808))
             send-=1
         ## Recv
         if sr and recv:
