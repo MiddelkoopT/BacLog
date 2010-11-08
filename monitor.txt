@@ -3,9 +3,11 @@ setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap
 
 Capture filter: udp port 47808
 
-## Ask for P20 (LDO on point 20, device 9001
-00c0e401fce10016d3b987f808004500002d5867000080110000c0a85301c0a85364bac0bac0001927e1810a0011010400030f0c0c010000141955
+## BackNet packet Invoke 1, Point LDO/BO instance 20.
+Send:   810a001101040003010c0c010000141955
+Expect: 810a0014010030010c0c0100001419553e91003f
 
+## Full Ethernet packet; P20 (LDO on point 20, device 9001)
 0000   00 c0 e4 01 fc e1 00 16 d3 b9 87 f8 08 00 45 00
 0010   00 2d 58 67 00 00 80 11 00 00 c0 a8 53 01 c0 a8
 0020   53 64 ba c0 ba c0 00 19 27 e1 81 0a 00 11 01 04

@@ -152,20 +152,17 @@ def main():
     config.read(('baclog.ini','local.ini'))
     PORT=config.getint('Network','port')
     print config.get('Network','bind')
-    
-    ## RAW PACKET: Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
-    message = binascii.unhexlify("810a001101040003010c0c010000141955")
-    print binascii.b2a_hex(message)
 
-    ## Generated message
+    ## Setup backets
     p=ReadPropertyRequest()
-    message=p()
-    print p
+    r=ReadPropertyResponse()
 
+    ## Bind
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind((config.get('Network','bind'),PORT))
     s.setblocking(0)
 
+    ## Loop
     send=2
     recv=send
     
@@ -177,16 +174,14 @@ def main():
         print sr,sw,se
         ## Send
         if sw and send:
-            p.id=send
-            message=p()
             print "BacLog.main> send:", send
-            s.sendto(message,(config.get('Test','target'),PORT))
+            p.id=send
+            s.sendto(p(),(config.get('Test','target'),PORT))
             send-=1
         ## Recv
         if sr and recv:
             (response,source)=s.recvfrom(1500)
-            r=ReadPropertyResponse(response)
-            ## Expect 810a0014010030010c0c0100001419553e91003f
+            r(response)
             print "BacLog.main> recv:", recv, r.id, r.value, source, binascii.b2a_hex(response)
             recv-=1
         if se:
@@ -196,4 +191,3 @@ def main():
 
 if __name__=='__main__':
     main()
-
