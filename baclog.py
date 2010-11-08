@@ -7,11 +7,12 @@ import binascii
 import struct
 import string
 
-### Magic Packet Class.
+### Magic Packet Class (somewhat an abstract class).
 class Packet:
     def __init__(self):
-        self._name=[]
-        self._format=[]
+        self._field=[]      # (name,value) of variable (None for constant/default)
+        self._format=[]     # format of the field
+        self._tag=[0]       # current context tag
         
         ## VLC
         self._add('BACnetIP','B',0x81)  # BACnet/IP
@@ -21,37 +22,73 @@ class Packet:
         self._add('version','B',0x01)   # ASHRAE 135-1995
         self._add('control','B',0x04)   # Confirmed Request
         ## APDU header
-        self._add('pdu','B',0x00)       # Confirmed Request Unsegmented
+        self._add('pdutype','B',0x00)   # Confirmed Request Unsegmented
         self._add('segment','B',0x04)   # Maximum APDU size 1024
         self._add('id','B',0x00)        # Request ID
-
-        self._packet=struct.Struct('!'+string.join(self._format))
-        print self
         
-    def _add(self,field,format,default=None):
-        self._name.append(field)
+    def _add(self,name,format,default=None):
+        self._field.append((name,default))
         self._format.append(format)
-        setattr(self, field, default)
+        if name:
+            setattr(self, name, default)
         
     def __call__(self):
-        self.length=self._packet.size ## self defined.
+        packet=struct.Struct('!'+string.join(self._format))
+        self.length=packet.size ## self defined
         values=[]
-        for f in self._name:
-            values.append(getattr(self, f))
-        return self._packet.pack(*values)
+        for (name,default) in self._field:
+            if not name==None:
+                values.append(getattr(self, name))
+            else:
+                values.append(default)
+        return packet.pack(*values)
 
     def __str__(self):
-        return "Packet> %s %d" % (binascii.b2a_hex(self()), self.length)
+        return "%s %d" % (binascii.b2a_hex(self()), self.length)
 
+    
+    
+    ## Context specific units
+    def _addTag(self,length):
+        tag=self._tag[-1]
+        self._tag[-1]+=1
+        self._add(None,'B',tag << 4 | 0x08 | length)  # tag number| context class | length
+        #print "Packet._useTag> ", tag
+        return tag
+
+    def _addObjectID(self,type,instance):
+        self._addTag(4)
+        self._add(None,'I',self.BACnetObjectType[type] << 22|instance) # object type
+
+    def _addPropertyID(self,property):
+        self._addTag(1)
+        self._add(None,'B',self.BACnetPropertyIdentifier[property]) # property
+        
+    ## Specification Enumerations
+    BACnetObjectType = {'binary-input':3,'binary-output':4}
+    BACnetPropertyIdentifier = {'present-value':85}
+
+
+class ReadPropertyRequest(Packet):
+    def __init__(self):
+        Packet.__init__(self)
+        self._add('servicechoice','B',12)       # readProperty(12) [no tag]
+        self._addObjectID('binary-output',20)   # ObjectIdentifier
+        self._addPropertyID('present-value')    # PropertyIdentifier
+                                                # ArrayIndex (optional)
 
 def main():
     print "BacLog.main>"
-    p=Packet()
-    message=p()
 
     ## Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
-    #message = binascii.unhexlify("810a001101040003010c0c010000141955")
-    
+    message = binascii.unhexlify("810a001101040003010c0c010000141955")
+    print binascii.b2a_hex(message)
+
+    ## Generated message
+    p=ReadPropertyRequest()
+    message=p()
+    print p
+
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('192.168.23.53',47808))
     s.setblocking(0)
