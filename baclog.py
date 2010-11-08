@@ -18,43 +18,39 @@ class Packet:
         self._add('BACnetIP','B',0x81)  # BACnet/IP
         self._add('UDP','B',0x0a)       # UDP
         self._add('length','H')         # Packet size
-        ## NPDU
-        self._add('version','B',0x01)   # ASHRAE 135-1995
-        self._add('control','B',0x04)   # Confirmed Request
-        ## APDU header
-        self._add('pdutype','B',0x00)   # Confirmed Request Unsegmented
-        self._add('segment','B',0x04)   # Maximum APDU size 1024
-        self._add('id','B',0x00)        # Request ID
         
-    def _add(self,name,format,default=None):
-        self._field.append((name,default))
+    def _add(self,name,format,value=None):
+        self._field.append((name,value))
         self._format.append(format)
         if name:
-            setattr(self, name, default)
+            setattr(self, name, value)
         
-    def __call__(self):
-        packet=struct.Struct('!'+string.join(self._format))
-        self.length=packet.size ## self defined
-        values=[]
-        for (name,default) in self._field:
-            if not name==None:
-                values.append(getattr(self, name))
-            else:
-                values.append(default)
-        return packet.pack(*values)
-
     def __str__(self):
         return "%s %d" % (binascii.b2a_hex(self()), self.length)
 
-    
-    
     ## Context specific units
-    def _addTag(self,length):
+    def _nextTag(self,skip=1):
         tag=self._tag[-1]
-        self._tag[-1]+=1
-        self._add(None,'B',tag << 4 | 0x08 | length)  # tag number| context class | length
-        #print "Packet._useTag> ", tag
+        self._tag[-1]+=skip
         return tag
+
+    def _addTag(self,length):
+        # tag number | context class | length
+        self._add(None,'B',self._nextTag() << 4 | 0x08 | length)  
+        #print "Packet._useTag> ", tag
+        
+    def _openTag(self):
+        # tag number | context class | open tag
+        tag=self._tag[-1]
+        self._tag.insert(0, 0)
+        self._add(None,'B', tag << 4 | 0x08 | 0x0e)  
+
+    def _closeTag(self):
+        # tag number | context class | close tag
+        tag=self._tag[-1]
+        self._tag.pop(0)
+        self._tag[-1]+=1
+        self._add(None,'B', tag << 4 | 0x08 | 0x0f)  
 
     def _addObjectID(self,type,instance):
         self._addTag(4)
@@ -64,23 +60,95 @@ class Packet:
         self._addTag(1)
         self._add(None,'B',self.BACnetPropertyIdentifier[property]) # property
         
+    ## Application Tags
+    def _addEnumerated(self,value,name=None):
+        self._add(None,'B',0x91)        # Enumerated(9) | Application | Length (1)
+        self._add(name,'B',value)       # Enumeration (0-255)
+        
     ## Specification Enumerations
     BACnetObjectType = {'binary-input':3,'binary-output':4}
     BACnetPropertyIdentifier = {'present-value':85}
 
-
-class ReadPropertyRequest(Packet):
+class RequestPacket(Packet):
     def __init__(self):
         Packet.__init__(self)
-        self._add('servicechoice','B',12)       # readProperty(12) [no tag]
+        ## NPDU
+        self._add('version','B',0x01)   # ASHRAE 135-1995
+        self._add('control','B',0x04)   # Confirmed Request
+        ## APDU header
+        self._add('pdutype','B',0x00)   # Confirmed Request Unsegmented
+        self._add('segment','B',0x04)   # Maximum APDU size 1024
+        self._add('id','B',0x01)        # Request ID
+
+    def __call__(self):
+        """Generate Packet Data"""
+        packet=struct.Struct('!'+string.join(self._format))
+        self.length=packet.size ## self defined
+
+        values=[]
+        for (name,value) in self._field:
+            if not name==None:
+                values.append(getattr(self, name))
+            else:
+                values.append(value)
+        return packet.pack(*values)
+
+class ReadPropertyRequest(RequestPacket):
+    def __init__(self):
+        RequestPacket.__init__(self)
+        self._add('servicechoice','B',12)       # readProperty(12)/ACK [no tag]
         self._addObjectID('binary-output',20)   # ObjectIdentifier
         self._addPropertyID('present-value')    # PropertyIdentifier
-                                                # ArrayIndex (optional)
+                                                # PropertyArrayIndex (optional)
 
+class ResponsePacket(Packet):
+    def __init__(self):
+        Packet.__init__(self)
+        ## NPDU
+        self._add('version','B',0x01)   # ASHRAE 135-1995
+        self._add('control','B',0x00)   # Reply
+        ## APDU header
+        self._add('pdutype','B',0x30)   # ComplexACK Unsegmented
+        self._add('id','B',None)        # Responding to Request ID
+
+    def __call__(self, data):
+        """Process Packet Data"""
+        print "ResponsePacket> ", binascii.b2a_hex(data)
+        packet=struct.Struct('!'+string.join(self._format))
+        values=packet.unpack_from(data)
+        #print self._format
+        #print values
+        
+        ## iterator over both lists simultaneously (python-foo)
+        for ((name,expected),value) in map(None,self._field,values):
+            if not name==None:
+                setattr(self, name, value)
+            ## debug
+            #print "ResponsePacket> %s %02x" %(name, value),
+            #if expected!=None:
+            #    print " %02x" % expected,
+            #print
+        #print "ResponsePacket> length", packet.size, self.length
+
+class ReadPropertyResponse(ResponsePacket):
+    def __init__(self,data=None):
+        ResponsePacket.__init__(self)
+        self._add('servicechoice','B',12)       # readProperty() [no tag]
+        self._addObjectID('binary-output',20)   # ObjectIdentifier
+        self._addPropertyID('present-value')    # PropertyIdentifier
+        self._nextTag()                         # PropertyArrayIndex (Optional)
+        ## PropertyValue
+        self._openTag()
+        self._addEnumerated(None,'value')
+        self._closeTag()
+
+        if data:
+            self(data)
+                                                
 def main():
     print "BacLog.main>"
 
-    ## Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
+    ## RAW PACKET: Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
     message = binascii.unhexlify("810a001101040003010c0c010000141955")
     print binascii.b2a_hex(message)
 
@@ -93,7 +161,7 @@ def main():
     s.bind(('192.168.23.53',47808))
     s.setblocking(0)
 
-    send=1
+    send=2
     recv=send
     
     while(send+recv>0):
@@ -104,14 +172,17 @@ def main():
         print sr,sw,se
         ## Send
         if sw and send:
+            p.id=send
+            message=p()
             print "BacLog.main> send:", send
             s.sendto(message,('192.168.83.100',47808))
             send-=1
         ## Recv
         if sr and recv:
             (response,source)=s.recvfrom(1500)
+            r=ReadPropertyResponse(response)
             ## Expect 810a0014010030010c0c0100001419553e91003f
-            print "BacLog.main> recv:", recv, source, binascii.b2a_hex(response)
+            print "BacLog.main> recv:", recv, r.id, r.value, source, binascii.b2a_hex(response)
             recv-=1
         if se:
             print "BacLog.main> error", se
