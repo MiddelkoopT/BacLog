@@ -6,6 +6,7 @@ import select
 import binascii
 import struct
 import string
+import ConfigParser
 
 ### Magic Packet Class (somewhat an abstract class).
 class Packet:
@@ -147,7 +148,11 @@ class ReadPropertyResponse(ResponsePacket):
                                                 
 def main():
     print "BacLog.main>"
-
+    config=ConfigParser.ConfigParser()
+    config.read(('baclog.ini','local.ini'))
+    PORT=config.getint('Network','port')
+    print config.get('Network','bind')
+    
     ## RAW PACKET: Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
     message = binascii.unhexlify("810a001101040003010c0c010000141955")
     print binascii.b2a_hex(message)
@@ -158,7 +163,7 @@ def main():
     print p
 
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    s.bind(('192.168.23.53',47808))
+    s.bind((config.get('Network','bind'),PORT))
     s.setblocking(0)
 
     send=2
@@ -175,7 +180,7 @@ def main():
             p.id=send
             message=p()
             print "BacLog.main> send:", send
-            s.sendto(message,('192.168.83.100',47808))
+            s.sendto(message,(config.get('Test','target'),PORT))
             send-=1
         ## Recv
         if sr and recv:
