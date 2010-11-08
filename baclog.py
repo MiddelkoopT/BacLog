@@ -26,31 +26,31 @@ class Packet:
         self._add('id','B',0x00)        # Request ID
 
         self._packet=struct.Struct('!'+string.join(self._format))
-        self._print()
+        print self
         
     def _add(self,field,format,default=None):
         self._name.append(field)
         self._format.append(format)
         setattr(self, field, default)
         
-    def _data(self):
+    def __call__(self):
         self.length=self._packet.size ## self defined.
         values=[]
         for f in self._name:
             values.append(getattr(self, f))
         return self._packet.pack(*values)
 
-    def _print(self):
-        print "Packet>", binascii.b2a_hex(self._data()), self.length
+    def __str__(self):
+        return "Packet> %s %d" % (binascii.b2a_hex(self()), self.length)
 
 
 def main():
     print "BacLog.main>"
+    p=Packet()
+    message=p()
+
     ## Invoke 1{8}, Read property, BO instance 20 (0x14), present-value (85).
     #message = binascii.unhexlify("810a001101040003010c0c010000141955")
-
-    p=Packet()
-    message=p._data()
     
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
     s.bind(('192.168.23.53',47808))
