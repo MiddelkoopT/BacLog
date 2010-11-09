@@ -8,6 +8,10 @@ import struct
 import string
 import ConfigParser
 
+# Use which data store.  [Database.driver stores value; not implemented so pydev will follow]
+#import postgres as database
+import console as database
+
 ### Magic Packet Class (somewhat an abstract class).
 class Packet:
     def __init__(self):
@@ -103,7 +107,7 @@ class ReadPropertyRequest(RequestPacket):
         #                                       # PropertyArrayIndex (optional)
 
 class ResponsePacket(Packet):
-    def __init__(self):
+    def __init__(self,data=None):
         Packet.__init__(self)
         ## NPDU
         self._add('version','B',0x01)   # ASHRAE 135-1995
@@ -111,6 +115,8 @@ class ResponsePacket(Packet):
         ## APDU header
         self._add('pdutype','B',0x30)   # ComplexACK Unsegmented
         self._add('id','B',None)        # Responding to Request ID
+        if(data):
+            self(data)
 
     def __call__(self, data):
         """Process Packet Data"""
@@ -146,46 +152,91 @@ class ReadPropertyResponse(ResponsePacket):
         if data:
             self(data)
                                                 
-def main():
-    config=ConfigParser.ConfigParser()
-    config.read(('baclog.ini','local.ini'))
-    PORT=config.getint('Network','port')
+class BacLog:
+    def __init__(self):
+        self.config=ConfigParser.ConfigParser()
+        self.config.read(('baclog.ini','local.ini'))
+    
+        print "BacLog>", self.config.get('Network','bind')
+        
+        ## load database/device list
+        db=database.Database()
+        self.devices=db.getDevices();
+        print "Baclog>", self.devices
+        
+        ## Work queues
+        self.work={} # send/recv pair by invokeid
+        self.done=[] # work finished
+        self.data=[] # controller initiated data (wait++ to expect).
+        
+        ## Communication queues/expect
+        self.send=[] # request queue
+        self.recv=[] # response queue
+        self.wait=0  # wait for n packets
+        
 
-    print "BacLog.main>", config.get('Network','bind')
+        ## Bind
+        self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        self.socket.bind((self.config.get('Network','bind'),self.config.getint('Network','port')))
+        self.socket.setblocking(0)
+        
+    def shutdown(self):
+        print "BacLog> shutdown"
+        self.socket.close()
+        print "BacLog> exit"
+        exit()
 
-    ## Setup packets
-    p=ReadPropertyRequest()
-    r=ReadPropertyResponse()
 
-    ## Bind
-    s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    s.bind((config.get('Network','bind'),PORT))
-    s.setblocking(0)
+    def run(self):
+        print "Baclog.run>"
 
-    ## Loop
-    recv=send=2
-    while(send+recv>0):
-        if send:
-            (sr,sw,se) = select.select([s],[s],[s])
-        else:
-            (sr,sw,se) = select.select([s],[],[s])
-        print sr,sw,se
-        ## Send
-        if sw and send:
-            print "BacLog.main> send:", send
-            p.id=send
-            s.sendto(p(),(config.get('Test','target'),PORT))
-            send-=1
-        ## Recv
-        if sr and recv:
-            (response,source)=s.recvfrom(1500)
-            r(response)
-            print "BacLog.main> recv:", recv, r.id, r.value, source, binascii.b2a_hex(response)
-            recv-=1
-        ## Error
-        if se:
-            print "BacLog.main> error", se
-    s.close()
+        ## Setup packets
+        request=ReadPropertyRequest()
+        response=ReadPropertyResponse()
+        
+        ## insert some work on queue (test to target)
+        target=(self.devices[0][1],self.devices[0][2]) ## ugh!
+        self.work[request.id]=(request,response,target)
+        self.send.append((request,target))
+        self.recv.append(response)
+        
+        self.process()
+        print "Baclog.run>", response.value
+        self.shutdown()
+
+    def process(self):
+        ## Loop
+        while(self.work or self.wait):
+            print "BacLog.main> select:",
+            s=self.socket
+            if self.send:
+                (sr,sw,se) = select.select([s],[s],[s])
+            else:
+                (sr,sw,se) = select.select([s],[],[s])
+            print sr,sw,se
+            ## Send
+            if sw and self.send:
+                (request,destination)=self.send.pop()
+                print "BacLog.main> send:", destination, request 
+                s.sendto(request(),destination)
+            ## Recv
+            if sr:
+                (response,source)=s.recvfrom(1500)
+                r=ResponsePacket(response)
+                print "BacLog.main> recv:", source, r.id, binascii.b2a_hex(response)
+                if self.work.has_key(r.id):
+                    # remove from work queue and put on done
+                    self.work[r.id][1](response)
+                    self.done.append(self.work[r.id])
+                    del self.work[r.id]
+                else:
+                    # not work so put on data queue
+                    self.data.append((response,source))
+            ## Error
+            if se:
+                print "BacLog.main> error", se
+                self.shutdown()
 
 if __name__=='__main__':
-    main()
+    main=BacLog()
+    main.run()
