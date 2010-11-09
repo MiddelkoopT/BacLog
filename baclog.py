@@ -100,7 +100,7 @@ class ReadPropertyRequest(RequestPacket):
         self._add('servicechoice','B',12)       # readProperty(12)/ACK [no tag]
         self._addObjectID('binary-output',20)   # ObjectIdentifier
         self._addPropertyID('present-value')    # PropertyIdentifier
-                                                # PropertyArrayIndex (optional)
+        #                                       # PropertyArrayIndex (optional)
 
 class ResponsePacket(Packet):
     def __init__(self):
@@ -147,13 +147,13 @@ class ReadPropertyResponse(ResponsePacket):
             self(data)
                                                 
 def main():
-    print "BacLog.main>"
     config=ConfigParser.ConfigParser()
     config.read(('baclog.ini','local.ini'))
     PORT=config.getint('Network','port')
-    print config.get('Network','bind')
 
-    ## Setup backets
+    print "BacLog.main>", config.get('Network','bind')
+
+    ## Setup packets
     p=ReadPropertyRequest()
     r=ReadPropertyResponse()
 
@@ -163,9 +163,7 @@ def main():
     s.setblocking(0)
 
     ## Loop
-    send=2
-    recv=send
-    
+    recv=send=2
     while(send+recv>0):
         if send:
             (sr,sw,se) = select.select([s],[s],[s])
@@ -184,9 +182,9 @@ def main():
             r(response)
             print "BacLog.main> recv:", recv, r.id, r.value, source, binascii.b2a_hex(response)
             recv-=1
+        ## Error
         if se:
             print "BacLog.main> error", se
-            
     s.close()
 
 if __name__=='__main__':
