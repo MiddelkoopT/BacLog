@@ -1,6 +1,6 @@
 #!/usr/bin/python
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
-## Simple console based Database Driver (config comes from baclog.ini
+## Simple console based Database Driver (config comes from baclog.ini)
 
 import ConfigParser
 import string
@@ -16,11 +16,13 @@ class Database:
         devices=string.split(self.config.get(self.database,'devices'),',')
         database=[]
         for address in devices:
-            instance=self.config.getint(address,'instance')
-            database.append((address,self.port,instance))
+            database.append((address,self.port))
         #print "console.Database.getDevices>", database 
         return database
     
     def getObjects(self,address):
-        objects=string.split(self.config.get(address,'objects'),',')
+        objects=[]
+        for o in string.split(self.config.get(address[0],'objects'),','):
+            t,i=string.split(o,':')
+            objects.append((t,int(i)))
         return objects

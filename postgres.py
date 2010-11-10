@@ -11,7 +11,7 @@ class Database:
 
     def getDevices(self):
         cur=self.conn.cursor()
-        cur.execute("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
+        cur.execute("SELECT IP,port FROM Devices WHERE last IS NULL")
         return cur.fetchall()
 
        

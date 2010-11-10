@@ -188,12 +188,12 @@ class BacLog:
 
         ## Read from database
         devices=self.db.getDevices();
-        target=(devices[0][0],devices[0][1]) ## ugh!
-        objects=self.db.getObjects(target[0])
+        target=devices[0]
+        objects=self.db.getObjects(target)
         print "BacLog.run>", target, objects
 
-        ## Setup test packets
-        request=ReadPropertyRequest('binary-output',20)
+        ## Setup test packet for first object
+        request=ReadPropertyRequest(*objects[0])
         response=ReadPropertyResponse(request)
 
         ## insert some work on queue (test to target)
