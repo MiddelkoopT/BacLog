@@ -12,7 +12,7 @@ CREATE TABLE Devices (
 	first timestamp, -- first seen
 	last timestamp, -- valid until (NULL indicates live object)
 	CONSTRAINT Devices_PK PRIMARY KEY (device)
-)
+);
 
 -- Points.  Physical equipment maped to an object a point in time.
 -- CREATE TABLE Points ( point integer -- Internal point ID );
@@ -42,6 +42,6 @@ CREATE TABLE Log (
 
 -- Sample Data/Test
 INSERT INTO Devices 
-	(IP,port,first) 
+	(IP,port,instance,first) 
 VALUES 
-	('192.168.83.100',47808,NOW());
+	('192.168.83.100',47808,9001,NOW());

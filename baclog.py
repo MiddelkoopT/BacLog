@@ -60,10 +60,13 @@ class Packet:
     def _addObjectID(self,type,instance):
         self._addTag(4)
         self._add(None,'I',self.BACnetObjectType[type] << 22|instance) # object type
+        self.type=type
+        self.instance=instance
 
     def _addPropertyID(self,property):
         self._addTag(1)
         self._add(None,'B',self.BACnetPropertyIdentifier[property]) # property
+        self.property=property
         
     ## Application Tags
     def _addEnumerated(self,value,name=None):
@@ -71,8 +74,8 @@ class Packet:
         self._add(name,'B',value)       # Enumeration (0-255)
         
     ## Specification Enumerations
-    BACnetObjectType = {'binary-input':3,'binary-output':4}
-    BACnetPropertyIdentifier = {'present-value':85}
+    BACnetObjectType = {'binary-input':3,'binary-output':4, 'device':8}
+    BACnetPropertyIdentifier = {'present-value':85, 'object-list':76}
 
 class RequestPacket(Packet):
     def __init__(self):
@@ -99,11 +102,11 @@ class RequestPacket(Packet):
         return packet.pack(*values)
 
 class ReadPropertyRequest(RequestPacket):
-    def __init__(self):
+    def __init__(self,type,instance,property='present-value'):
         RequestPacket.__init__(self)
         self._add('servicechoice','B',12)       # readProperty(12)/ACK [no tag]
-        self._addObjectID('binary-output',20)   # ObjectIdentifier
-        self._addPropertyID('present-value')    # PropertyIdentifier
+        self._addObjectID(type,instance)   # ObjectIdentifier
+        self._addPropertyID(property)    # PropertyIdentifier
         #                                       # PropertyArrayIndex (optional)
 
 class ResponsePacket(Packet):
@@ -136,31 +139,28 @@ class ResponsePacket(Packet):
         #print "ResponsePacket> length", packet.size, self.length
 
 class ReadPropertyResponse(ResponsePacket):
-    def __init__(self,data=None):
+    def __init__(self,request):
         ResponsePacket.__init__(self)
-        self._add('servicechoice','B',12)       # readProperty() [no tag]
-        self._addObjectID('binary-output',20)   # ObjectIdentifier
-        self._addPropertyID('present-value')    # PropertyIdentifier
-        self._nextTag()                         # PropertyArrayIndex (Optional)
+        self._add('servicechoice','B',12)           # readProperty() [no tag]
+        self._addObjectID(request.type,request.id)  # ObjectIdentifier
+        self._addPropertyID(request.property)       # PropertyIdentifier
+        self._nextTag()                             # PropertyArrayIndex (Optional)
         ## PropertyValue
         self._openTag()
         self._addEnumerated(None,'value')
         self._closeTag()
 
-        if data:
-            self(data)
                                                 
 class BacLog:
     def __init__(self):
+        
+        ## Configure
         self.config=ConfigParser.ConfigParser()
         self.config.read(('baclog.ini','local.ini'))
-    
-        print "BacLog>", self.config.get('Network','bind')
         
-        ## load database/device list
-        db=database.Database()
-        self.devices=db.getDevices();
-        print "Baclog>", self.devices
+        ## Load database driver
+        self.db=database.Database()
+        print "Baclog>", self.config.get('Network','bind'), self.db.database
         
         ## Work queues
         self.work={} # send/recv pair by invokeid
@@ -186,12 +186,17 @@ class BacLog:
     def run(self):
         print "Baclog.run>"
 
-        ## Setup packets
-        request=ReadPropertyRequest()
-        response=ReadPropertyResponse()
-        
+        ## Read from database
+        devices=self.db.getDevices();
+        target=(devices[0][0],devices[0][1]) ## ugh!
+        objects=self.db.getObjects(target[0])
+        print "BacLog.run>", target, objects
+
+        ## Setup test packets
+        request=ReadPropertyRequest('binary-output',20)
+        response=ReadPropertyResponse(request)
+
         ## insert some work on queue (test to target)
-        target=(self.devices[0][1],self.devices[0][2]) ## ugh!
         self.work[request.id]=(request,response,target)
         self.send.append((request,target))
         self.recv.append(response)

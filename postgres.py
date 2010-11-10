@@ -7,10 +7,11 @@ import psycopg2
 class Database:
     def __init__(self,database='baclog'):
         self.conn = psycopg2.connect(database=database)
+        self.database=database
 
     def getDevices(self):
         cur=self.conn.cursor()
-        cur.execute("SELECT device,IP,port FROM Devices WHERE last IS NULL")
+        cur.execute("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
         return cur.fetchall()
 
        
