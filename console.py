@@ -19,5 +19,6 @@ class Database:
         for address in devices:
             device+=1
             database.append((device,address,self.port))
-        #print "Console.Database.getDevices>", database 
+        #print "console.Database.getDevices>", database 
         return database
+    

@@ -120,11 +120,9 @@ class ResponsePacket(Packet):
 
     def __call__(self, data):
         """Process Packet Data"""
-        print "ResponsePacket> ", binascii.b2a_hex(data)
+        #print "ResponsePacket> ", binascii.b2a_hex(data)
         packet=struct.Struct('!'+string.join(self._format))
         values=packet.unpack_from(data)
-        #print self._format
-        #print values
         
         ## iterator over both lists simultaneously (python-foo)
         for ((name,expected),value) in map(None,self._field,values):
@@ -173,7 +171,6 @@ class BacLog:
         self.send=[] # request queue
         self.recv=[] # response queue
         self.wait=0  # wait for n packets
-        
 
         ## Bind
         self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -185,7 +182,6 @@ class BacLog:
         self.socket.close()
         print "BacLog> exit"
         exit()
-
 
     def run(self):
         print "Baclog.run>"
@@ -207,7 +203,7 @@ class BacLog:
     def process(self):
         ## Loop
         while(self.work or self.wait):
-            print "BacLog.main> select:",
+            print "BacLog.process> select:",
             s=self.socket
             if self.send:
                 (sr,sw,se) = select.select([s],[s],[s])
@@ -217,13 +213,13 @@ class BacLog:
             ## Send
             if sw and self.send:
                 (request,destination)=self.send.pop()
-                print "BacLog.main> send:", destination, request 
+                print "BacLog.process> send:", destination, request 
                 s.sendto(request(),destination)
             ## Recv
             if sr:
                 (response,source)=s.recvfrom(1500)
                 r=ResponsePacket(response)
-                print "BacLog.main> recv:", source, r.id, binascii.b2a_hex(response)
+                print "BacLog.process> recv:", source, r.id, binascii.b2a_hex(response)
                 if self.work.has_key(r.id):
                     # remove from work queue and put on done
                     self.work[r.id][1](response)
@@ -234,7 +230,7 @@ class BacLog:
                     self.data.append((response,source))
             ## Error
             if se:
-                print "BacLog.main> error", se
+                print "BacLog.process> error", se
                 self.shutdown()
 
 if __name__=='__main__':
