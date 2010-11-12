@@ -21,8 +21,8 @@ BACnetConfirmedServiceChoice = {'readProperty':12, 'subscribeCOV':5 }
 ## Used to get a new request ID
 LastRequestID = 0        
 
-### Test packet class (send raw hex encoded packet)
 class RawPacket:
+    """Test packet class (send raw hex encoded packet)"""
     def __init__(self,data=None,id=None):
         self.data=data
         self.id=id
@@ -30,17 +30,30 @@ class RawPacket:
     def __call__(self):
         return binascii.unhexlify(self.data)
 
-### Magic Packet Class (somewhat an abstract class).
 class Packet:
-    def __init__(self):
+    """Magic Packet Class (somewhat an abstract class)."""
+    def __init__(self,control=None,pdu=None,data=None):
         self._field=[]      # (name,value) of variable (None for constant/default)
         self._format=[]     # format of the field
         self._tag=[0]       # current context tag
         
-        ## VLC
-        self._add('BACnetIP','B',0x81)  # BACnet/IP
-        self._add('UDP','B',0x0a)       # UDP
-        self._add('length','H')         # Packet size
+        ## BVLC
+        self._add(None,'B',0x81)            # BACnet/IP
+        self._add(None,'B',0x0a)            # UDP
+        self._add('_length','H')            # Packet size
+        ## NPDU
+        self._add('version','B',0x01)       # ASHRAE 135-1995
+        self._add('control','B',control)    # NPDU Control; Confirmed Request=0x04
+        ## APDU header
+        self._add('_pdu','B',pdu)           # (pdutype<<4 | pduflags)
+        
+        ## Unknown packets set data
+        data and self(data)
+        
+        # Set computed fields.
+        if(self._pdu!=None):
+            self.pdutype=(self._pdu&0xF0) >> 4
+            self.pduflags=(self._pdu&0x0F) 
         
     def _add(self,name,format,value=None):
         self._field.append((name,value))
@@ -49,7 +62,44 @@ class Packet:
             setattr(self, name, value)
         
     def __str__(self):
-        return "%s %d" % (binascii.b2a_hex(self()), self.length)
+        return "%s %d" % (binascii.b2a_hex(self()), self._length)
+
+    def __call__(self, data=None):
+        if(data==None):
+            return self._encode()
+        else:
+            self._decode(data)
+        
+    def _encode(self):
+        """Generate Packet Data"""
+        packet=struct.Struct('!'+string.join(self._format))
+        ## Generated fields
+        self._length=packet.size
+        self._pdu=self.pdutype<<4|self.pduflags 
+
+        values=[]
+        for (name,value) in self._field:
+            if not name==None:
+                values.append(getattr(self, name))
+            else:
+                values.append(value)
+        return packet.pack(*values)
+
+    def _decode(self, data):
+        """Process Packet Data"""
+        #print "Packet.decode> ", binascii.b2a_hex(data)
+        packet=struct.Struct('!'+string.join(self._format))
+        values=packet.unpack_from(data)
+        
+        ## iterator over both lists simultaneously (python-foo)
+        for ((name,expected),value) in map(None,self._field,values):
+            if not name==None:
+                setattr(self, name, value)
+            ## debug
+            if(expected!=None and value!=expected):
+                print "Packet.decode> %s %02x %02x" %(name, value, expected)
+        #if(packet.size != self.length):
+        #    print "Packet.decode> length", packet.size, self.length
 
     ## Context specific units
     
@@ -112,89 +162,33 @@ class Packet:
 class RequestPacket(Packet):
     def __init__(self,servicechoice,id=None):
         global LastRequestID
-        Packet.__init__(self)
-        ## NPDU
-        self._add('version','B',0x01)   # ASHRAE 135-1995
-        self._add('control','B',0x04)   # Confirmed Request
-        ## APDU header
-        self._add('pdutype','B',0x00)   # Confirmed Request Unsegmented
+        Packet.__init__(self,0x04,0x00) # Expecting Reply ; Confirmed Request | Unsegmented
         self._add('segment','B',0x04)   # Maximum APDU size 1024
-        self._add('id','B',id)        # Request ID
+        self._add('id','B',id)          # Request ID
         self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
                   BACnetConfirmedServiceChoice[servicechoice])
         if id==None:
             LastRequestID+=1
             self.id=LastRequestID
 
-    def __call__(self):
-        """Generate Packet Data"""
-        packet=struct.Struct('!'+string.join(self._format))
-        self.length=packet.size ## self defined
-
-        values=[]
-        for (name,value) in self._field:
-            if not name==None:
-                values.append(getattr(self, name))
-            else:
-                values.append(value)
-        return packet.pack(*values)
-
-class ResponsePacket(Packet):
-    def __init__(self,servicechoice,data=None):
-        Packet.__init__(self)
-        ## NPDU
-        self._add('version','B',0x01)   # ASHRAE 135-1995
-        self._add('control','B',0x00)   # Reply
+class ComplexACK(Packet):
+    def __init__(self,servicechoice=None,data=None):
+        Packet.__init__(self,0x00,0x30) # Reply ; ComplexACK | Unsegmented
         ## APDU header
-        self._add('pdutype','B',0x30)   # ComplexACK Unsegmented
         self._add('id','B',None)        # Responding to Request ID
         self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
                   servicechoice and BACnetConfirmedServiceChoice[servicechoice])
         if(data):
             self(data)
 
-    def __call__(self, data):
-        """Process Packet Data"""
-        #print "ResponsePacket> ", binascii.b2a_hex(data)
-        packet=struct.Struct('!'+string.join(self._format))
-        values=packet.unpack_from(data)
-        
-        ## iterator over both lists simultaneously (python-foo)
-        for ((name,expected),value) in map(None,self._field,values):
-            if not name==None:
-                setattr(self, name, value)
-            ## debug
-            if(expected!=None and value!=expected):
-                print "ResponsePacket> %s %02x %02x" %(name, value, expected)
-        #if(packet.size != self.length):
-        #    print "ResponsePacket> length", packet.size, self.length
+class SimpleACK(Packet):
+    def __init__(self,request=None,data=None):
+        Packet.__init__(self,0x00,0x20)      # Reply Present ; SimpleACK | 0x00
+        self._add('id','B',request and request.id)  # original request ID
+        self._add('servicechoice','B',request and request.servicechoice)  # serviceChoice/ACK
+        if(data):
+            self(data)
 
-class SimpleAck(Packet):
-    def __init__(self,request):
-        Packet.__init__(self)
-        ## NPDU
-        self._add('version','B',0x01)   # ASHRAE 135-1995
-        self._add('control','B',0x00)   # Confirmed Request
-        ## APDU header
-        self._add('pdutype','B',0x20)   # SimpleACK
-        self._add('id','B',request.id)  # original request ID
-        self._add('servicechoice','B',request.servicechoice)  # serviceChoice/ACK
-
-    def __call__(self, data):
-        """Process Packet Data"""
-        #print "ResponsePacket> ", binascii.b2a_hex(data)
-        packet=struct.Struct('!'+string.join(self._format))
-        values=packet.unpack_from(data)
-        
-        ## iterator over both lists simultaneously (python-foo)
-        for ((name,expected),value) in map(None,self._field,values):
-            if not name==None:
-                setattr(self, name, value)
-            ## debug
-            if(expected!=None and value!=expected):
-                print "SimpleAckPacket> %s %02x %02x" %(name, value, expected)
-        #if(packet.size != self.length):
-        #    print "ResponsePacket> length", packet.size, self.length
 
 class ReadPropertyRequest(RequestPacket):
     def __init__(self,type,instance,property='present-value'):
@@ -203,9 +197,9 @@ class ReadPropertyRequest(RequestPacket):
         self._addPropertyID(property)       # PropertyIdentifier
         #                                   # PropertyArrayIndex (optional)
 
-class ReadPropertyResponse(ResponsePacket):
+class ReadPropertyResponse(ComplexACK):
     def __init__(self,request):
-        ResponsePacket.__init__(self,'readProperty')
+        ComplexACK.__init__(self,'readProperty')
         self._addObjectID(request.type,request.id)  # ObjectIdentifier
         self._addPropertyID(request.property)       # PropertyIdentifier
         self._nextTag()                             # PropertyArrayIndex (Optional)
@@ -271,15 +265,15 @@ class BacLog:
         response=ReadPropertyResponse(request)
 
         ## Raw UDP data (debug)
-        #request=RawPacket("810A0016010400040E0509011C0100001429003A0E10")
+        #request=RawPacket("")
         #response=ResponsePacket(None,None)
         
-        #self.work[request.id]=(request,response,target)
-        #self.send.append((request,target))
+        self.work[request.id]=(request,response,target)
+        self.send.append((request,target))
         
         ## subscribe to COV for 2 min.
         subscribe=SubscribeCOVRequest(object)
-        self.work[subscribe.id]=(subscribe,SimpleAck(subscribe),target)
+        self.work[subscribe.id]=(subscribe,SimpleACK(subscribe),target)
         self.send.append((subscribe,target))
         
         self.process()
@@ -304,9 +298,17 @@ class BacLog:
             ## Recv
             if sr:
                 (response,source)=s.recvfrom(1500)
-                r=ResponsePacket(None,response)
-                print "BacLog.process> recv:", source, r.id, binascii.b2a_hex(response)
-                if self.work.has_key(r.id):
+                ## Process BVLC/NPDU and start of APDU
+                r=Packet(data=response)
+                print "BacLog.process> recv:", source, r.pdutype, binascii.b2a_hex(response)
+                ## Process PDU
+                if(r.pdutype==0x3): ## ComplexACK
+                    r=ComplexACK(data=response) # Parse PDU
+                elif r.pdutype==0x2: ## SimpleACK
+                    r=SimpleACK(data=response)
+                elif r.pdutype==0x1: ## Unconfirmed Request
+                    r=None ## Thinkgs get hard!
+                if r and self.work.has_key(r.id):
                     # remove from work queue and put on done
                     self.work[r.id][1](response)
                     self.done.append(self.work[r.id])
