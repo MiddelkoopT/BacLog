@@ -75,7 +75,7 @@ class Packet:
         
     ## Specification Enumerations
     BACnetObjectType = {'binary-input':3,'binary-output':4, 'device':8}
-    BACnetPropertyIdentifier = {'present-value':85, 'object-list':76}
+    BACnetPropertyIdentifier = {'present-value':85, 'object-list':76, 'notification-class':17}
 
 class RequestPacket(Packet):
     def __init__(self):
@@ -169,7 +169,6 @@ class BacLog:
         
         ## Communication queues/expect
         self.send=[] # request queue
-        self.recv=[] # response queue
         self.wait=0  # wait for n packets
 
         ## Bind
@@ -199,7 +198,6 @@ class BacLog:
         ## insert some work on queue (test to target)
         self.work[request.id]=(request,response,target)
         self.send.append((request,target))
-        self.recv.append(response)
         
         self.process()
         print "Baclog.run>", response.value
