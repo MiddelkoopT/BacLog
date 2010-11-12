@@ -6,6 +6,7 @@ import select
 import binascii
 import struct
 import string
+import types
 import ConfigParser
 
 # Use which data store.  [Database.driver stores value; not implemented so pydev will follow]
@@ -16,6 +17,18 @@ import console as database
 BACnetObjectType = {'binary-input':3,'binary-output':4, 'device':8}
 BACnetPropertyIdentifier = {'present-value':85, 'object-list':76, 'notification-class':17}
 BACnetConfirmedServiceChoice = {'readProperty':12, 'subscribeCOV':5 }
+
+## Used to get a new request ID
+LastRequestID = 0        
+
+### Test packet class (send raw hex encoded packet)
+class RawPacket:
+    def __init__(self,data=None,id=None):
+        self.data=data
+        self.id=id
+        
+    def __call__(self):
+        return binascii.unhexlify(self.data)
 
 ### Magic Packet Class (somewhat an abstract class).
 class Packet:
@@ -39,6 +52,7 @@ class Packet:
         return "%s %d" % (binascii.b2a_hex(self()), self.length)
 
     ## Context specific units
+    
     def _nextTag(self,skip=1):
         tag=self._tag[-1]
         self._tag[-1]+=skip
@@ -62,24 +76,42 @@ class Packet:
         self._tag[-1]+=1
         self._add(None,'B', tag << 4 | 0x08 | 0x0f)  
 
+    ## Context Encodings
+    
     def _addObjectID(self,type,instance):
         self._addTag(4)
-        self._add(None,'I',BACnetObjectType[type] << 22|instance) # object type
+        self._add('object','I',BACnetObjectType[type] << 22 | instance) # object Type
         self.type=type
         self.instance=instance
 
     def _addPropertyID(self,property):
         self._addTag(1)
-        self._add(None,'B',BACnetPropertyIdentifier[property]) # property
-        self.property=property
+        if type(property) is types.StringType:
+            property=BACnetPropertyIdentifier[property]
+        self._add('property','B',property) # property
+
+    def _addBoolean(self,value,name=None):
+        self._addTag(1)
+        self._add(name,'B',value)
         
-    ## Application Tags
-    def _addEnumerated(self,value,name=None):
-        self._add(None,'B',0x91)        # Enumerated(9) | Application | Length (1)
+    def _addUnsigned32(self,value,name=None):
+        self._addTag(4)
+        self._add(name, 'I', value)    
+
+    def _addUnsigned(self,value,name=None):
+        self._addTag(2)
+        self._add(name, 'H', value)    
+
+    ## Application Primitives
+    
+    def _Enumerated(self,value,name=None):
+        self._add(None,'B',0x91)        # Tag: Enumerated(9) | Application | Length (1)
         self._add(name,'B',value)       # Enumeration (0-255)
+
         
 class RequestPacket(Packet):
-    def __init__(self,servicechoice):
+    def __init__(self,servicechoice,id=None):
+        global LastRequestID
         Packet.__init__(self)
         ## NPDU
         self._add('version','B',0x01)   # ASHRAE 135-1995
@@ -87,9 +119,12 @@ class RequestPacket(Packet):
         ## APDU header
         self._add('pdutype','B',0x00)   # Confirmed Request Unsegmented
         self._add('segment','B',0x04)   # Maximum APDU size 1024
-        self._add('id','B',0x01)        # Request ID
+        self._add('id','B',id)        # Request ID
         self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
-                  BACnetConfirmedServiceChoice[servicechoice])   
+                  BACnetConfirmedServiceChoice[servicechoice])
+        if id==None:
+            LastRequestID+=1
+            self.id=LastRequestID
 
     def __call__(self):
         """Generate Packet Data"""
@@ -129,11 +164,37 @@ class ResponsePacket(Packet):
             if not name==None:
                 setattr(self, name, value)
             ## debug
-            #print "ResponsePacket> %s %02x" %(name, value),
-            #if expected!=None:
-            #    print " %02x" % expected,
-            #print
-        #print "ResponsePacket> length", packet.size, self.length
+            if(expected!=None and value!=expected):
+                print "ResponsePacket> %s %02x %02x" %(name, value, expected)
+        #if(packet.size != self.length):
+        #    print "ResponsePacket> length", packet.size, self.length
+
+class SimpleAck(Packet):
+    def __init__(self,request):
+        Packet.__init__(self)
+        ## NPDU
+        self._add('version','B',0x01)   # ASHRAE 135-1995
+        self._add('control','B',0x00)   # Confirmed Request
+        ## APDU header
+        self._add('pdutype','B',0x20)   # SimpleACK
+        self._add('id','B',request.id)  # original request ID
+        self._add('servicechoice','B',request.servicechoice)  # serviceChoice/ACK
+
+    def __call__(self, data):
+        """Process Packet Data"""
+        #print "ResponsePacket> ", binascii.b2a_hex(data)
+        packet=struct.Struct('!'+string.join(self._format))
+        values=packet.unpack_from(data)
+        
+        ## iterator over both lists simultaneously (python-foo)
+        for ((name,expected),value) in map(None,self._field,values):
+            if not name==None:
+                setattr(self, name, value)
+            ## debug
+            if(expected!=None and value!=expected):
+                print "SimpleAckPacket> %s %02x %02x" %(name, value, expected)
+        #if(packet.size != self.length):
+        #    print "ResponsePacket> length", packet.size, self.length
 
 class ReadPropertyRequest(RequestPacket):
     def __init__(self,type,instance,property='present-value'):
@@ -150,12 +211,16 @@ class ReadPropertyResponse(ResponsePacket):
         self._nextTag()                             # PropertyArrayIndex (Optional)
         ## PropertyValue
         self._openTag()
-        self._addEnumerated(None,'value')
+        self._Enumerated(None,'value')
         self._closeTag()
 
 class SubscribeCOVRequest(RequestPacket):
-    def __init__(self):
+    def __init__(self,object,lifetime=120):
         RequestPacket.__init__(self,'subscribeCOV')
+        self._addUnsigned32(0)      # subscriberProcessIdentifier
+        self._addObjectID(*object)  # monitoredObjectIdentifier
+        self._addBoolean(False)     # issueConfirmedNotifications
+        self._addUnsigned(lifetime) # lifetime
 
 
 #### Main Class
@@ -198,15 +263,24 @@ class BacLog:
         devices=self.db.getDevices();
         target=devices[0]
         objects=self.db.getObjects(target)
+        object=objects[0]
         print "BacLog.run>", target, objects
-
+        
         ## Setup test packet for first object
-        request=ReadPropertyRequest(*objects[0])
+        request=ReadPropertyRequest(*object)
         response=ReadPropertyResponse(request)
 
-        ## insert some work on queue (test to target)
-        self.work[request.id]=(request,response,target)
-        self.send.append((request,target))
+        ## Raw UDP data (debug)
+        #request=RawPacket("810A0016010400040E0509011C0100001429003A0E10")
+        #response=ResponsePacket(None,None)
+        
+        #self.work[request.id]=(request,response,target)
+        #self.send.append((request,target))
+        
+        ## subscribe to COV for 2 min.
+        subscribe=SubscribeCOVRequest(object)
+        self.work[subscribe.id]=(subscribe,SimpleAck(subscribe),target)
+        self.send.append((subscribe,target))
         
         self.process()
         print "Baclog.run>", response.value
@@ -225,7 +299,7 @@ class BacLog:
             ## Send
             if sw and self.send:
                 (request,destination)=self.send.pop()
-                print "BacLog.process> send:", destination, request 
+                print "BacLog.process> send:", destination, request.id, request 
                 s.sendto(request(),destination)
             ## Recv
             if sr:

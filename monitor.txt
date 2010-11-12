@@ -3,6 +3,7 @@ setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap
 
 Capture filter: udp port 47808
 
+#### read-property present-value
 ## BackNet packet Invoke 1, Point LDO/BO instance 20.
 Send:   810a001101040003010c0c010000141955
 Expect: 810a0014010030010c0c0100001419553e91003f
@@ -12,3 +13,6 @@ Expect: 810a0014010030010c0c0100001419553e91003f
 0010   00 2d 58 67 00 00 80 11 00 00 c0 a8 53 01 c0 a8
 0020   53 64 ba c0 ba c0 00 19 27 e1 81 0a 00 11 01 04
 0030   00 03 0f 0c 0c 01 00 00 14 19 55
+
+#### SubscribeCOV
+## C0A85364BAC0 810A 00160104 00040E05 09011C01 00001429 003A0E10
