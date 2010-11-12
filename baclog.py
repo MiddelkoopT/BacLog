@@ -12,6 +12,11 @@ import ConfigParser
 #import postgres as database
 import console as database
 
+## Specification Enumerations
+BACnetObjectType = {'binary-input':3,'binary-output':4, 'device':8}
+BACnetPropertyIdentifier = {'present-value':85, 'object-list':76, 'notification-class':17}
+BACnetConfirmedServiceChoice = {'readProperty':12, 'subscribeCOV':5 }
+
 ### Magic Packet Class (somewhat an abstract class).
 class Packet:
     def __init__(self):
@@ -59,13 +64,13 @@ class Packet:
 
     def _addObjectID(self,type,instance):
         self._addTag(4)
-        self._add(None,'I',self.BACnetObjectType[type] << 22|instance) # object type
+        self._add(None,'I',BACnetObjectType[type] << 22|instance) # object type
         self.type=type
         self.instance=instance
 
     def _addPropertyID(self,property):
         self._addTag(1)
-        self._add(None,'B',self.BACnetPropertyIdentifier[property]) # property
+        self._add(None,'B',BACnetPropertyIdentifier[property]) # property
         self.property=property
         
     ## Application Tags
@@ -73,12 +78,8 @@ class Packet:
         self._add(None,'B',0x91)        # Enumerated(9) | Application | Length (1)
         self._add(name,'B',value)       # Enumeration (0-255)
         
-    ## Specification Enumerations
-    BACnetObjectType = {'binary-input':3,'binary-output':4, 'device':8}
-    BACnetPropertyIdentifier = {'present-value':85, 'object-list':76, 'notification-class':17}
-
 class RequestPacket(Packet):
-    def __init__(self):
+    def __init__(self,servicechoice):
         Packet.__init__(self)
         ## NPDU
         self._add('version','B',0x01)   # ASHRAE 135-1995
@@ -87,6 +88,8 @@ class RequestPacket(Packet):
         self._add('pdutype','B',0x00)   # Confirmed Request Unsegmented
         self._add('segment','B',0x04)   # Maximum APDU size 1024
         self._add('id','B',0x01)        # Request ID
+        self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
+                  BACnetConfirmedServiceChoice[servicechoice])   
 
     def __call__(self):
         """Generate Packet Data"""
@@ -101,16 +104,8 @@ class RequestPacket(Packet):
                 values.append(value)
         return packet.pack(*values)
 
-class ReadPropertyRequest(RequestPacket):
-    def __init__(self,type,instance,property='present-value'):
-        RequestPacket.__init__(self)
-        self._add('servicechoice','B',12)       # readProperty(12)/ACK [no tag]
-        self._addObjectID(type,instance)   # ObjectIdentifier
-        self._addPropertyID(property)    # PropertyIdentifier
-        #                                       # PropertyArrayIndex (optional)
-
 class ResponsePacket(Packet):
-    def __init__(self,data=None):
+    def __init__(self,servicechoice,data=None):
         Packet.__init__(self)
         ## NPDU
         self._add('version','B',0x01)   # ASHRAE 135-1995
@@ -118,6 +113,8 @@ class ResponsePacket(Packet):
         ## APDU header
         self._add('pdutype','B',0x30)   # ComplexACK Unsegmented
         self._add('id','B',None)        # Responding to Request ID
+        self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
+                  servicechoice and BACnetConfirmedServiceChoice[servicechoice])
         if(data):
             self(data)
 
@@ -138,10 +135,16 @@ class ResponsePacket(Packet):
             #print
         #print "ResponsePacket> length", packet.size, self.length
 
+class ReadPropertyRequest(RequestPacket):
+    def __init__(self,type,instance,property='present-value'):
+        RequestPacket.__init__(self,'readProperty')
+        self._addObjectID(type,instance)    # ObjectIdentifier
+        self._addPropertyID(property)       # PropertyIdentifier
+        #                                   # PropertyArrayIndex (optional)
+
 class ReadPropertyResponse(ResponsePacket):
     def __init__(self,request):
-        ResponsePacket.__init__(self)
-        self._add('servicechoice','B',12)           # readProperty() [no tag]
+        ResponsePacket.__init__(self,'readProperty')
         self._addObjectID(request.type,request.id)  # ObjectIdentifier
         self._addPropertyID(request.property)       # PropertyIdentifier
         self._nextTag()                             # PropertyArrayIndex (Optional)
@@ -150,7 +153,13 @@ class ReadPropertyResponse(ResponsePacket):
         self._addEnumerated(None,'value')
         self._closeTag()
 
-                                                
+class SubscribeCOVRequest(RequestPacket):
+    def __init__(self):
+        RequestPacket.__init__(self,'subscribeCOV')
+
+
+#### Main Class
+
 class BacLog:
     def __init__(self):
         
@@ -221,7 +230,7 @@ class BacLog:
             ## Recv
             if sr:
                 (response,source)=s.recvfrom(1500)
-                r=ResponsePacket(response)
+                r=ResponsePacket(None,response)
                 print "BacLog.process> recv:", source, r.id, binascii.b2a_hex(response)
                 if self.work.has_key(r.id):
                     # remove from work queue and put on done
