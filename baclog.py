@@ -237,7 +237,6 @@ class Integer(Tagged):
 
 class Enumerated(Unsigned):
     def __str__(self):
-        self._display=dict((value, key) for key, value in self._enumeration.iteritems())
         return "%s:%d" % self._display[self._value],self._value
         
 class Bitstring(Tagged):
@@ -315,17 +314,30 @@ class SequenceOf(Tagged):
             element=DataClass(data,self._getTag())
             setattr(self._value[-1],name,element._value)
             print "SequenceOf.decode>", len(self._value), name, element._value
+        
         print "SequenceOf.decode> ------------", opentag
 
+        ## Magic to make sequenceof to use _sequencekey for attiributes
+        if self._sequencekey==None:
+            return
+        for item in self._value:
+            name,cls = self._sequenceof._sequence[self._sequencekey]
+            index=getattr(item,name,cls)
+            display=cls._display[index]
+            assert display not in dir(self) 
+            setattr(self,display,item)
+        self._value=self
+
 ## PhaseII data types
-            
 class PropertyIdentifier(Enumerated):
     ## TODO: Remove/Merge BACnetPropertyIdentifier
     _enumeration={
-                  'present-value':85,
-                  'object-list':76,
-                  'notification-class':17
+                  'presentValue':85,
+                  'objectList':76,
+                  'notificationClass':17,
+                  'statusFlags':111
                   }
+    _display=dict((value, key) for key, value in _enumeration.iteritems())
         
 class PropertyValue(Sequence):
     _sequence=[
@@ -337,6 +349,7 @@ class PropertyValue(Sequence):
 
 class SequenceOfPropertyValue(SequenceOf):
     _sequenceof=PropertyValue
+    _sequencekey=0
 
 ## PhaseII PDU packets
 class COVNotification(Sequence): # SEQUENCE
@@ -520,7 +533,7 @@ class BacLog:
                     if r.servicechoice==BACnetUnconfirmedServiceChoice['unconfirmedCOVNotification']:
                         r=UnconfirmedRequest('unconfirmedCOVNotification',response)
                         d=UnconfirmedCOVNotification(r)
-                        print d.values[0].property
+                        print d.values.presentValue
                         r=None
                 if r and self.work.has_key(r.pid):
                     # remove from work queue and put on done
