@@ -4,13 +4,14 @@ import struct
 import types
 import bacnet
 import string
+import binascii
 import depreciated
 
 ## PhaseII Data types
 class Tagged:
     def __init__(self,*args,**kwargs):
         '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
-        print "Tagged> %s " % self.__class__, args, kwargs
+        #print "Tagged> %s " % self.__class__, args, kwargs
         self._value=None  ## Current "Value"
 
         ## Little messy but makes objects behave nicely.
@@ -66,21 +67,37 @@ class Tagged:
         '''Default constructor just passes value to self._value'''
         self._value=value
 
+    def _decode(self,data):
+        '''Default fixed formatting found in self._format'''
+        num,cls,length=self._decodeTag()
+        self._value,=struct.unpack(self._format,data._get(length))
+        print "Tagged.decode>", self.__class__, self._value
+
     def _encode(self,tagnum=None):
         '''Default fixed formatting found in self._format'''
         data=struct.Struct('!B'+self._format)
         length=data.size-1
         return data.pack(self._setTag(tagnum,1,length),self._value)
 
+
 ## Basic Types        
 
 class Unsigned(Tagged):
     ## decode also used by Bitstring
+    _size=8
     def _decode(self, data):
+        '''Variable length decoding of Unsigned'''
         num,cls,length=self._decodeTag()
-        assert length!=3 # unsupported unpack
-        self._value,=struct.unpack([None,'!B','!H'][length],data._get(length))
-        #print "Unsigned.decode>", self._value
+        assert length<=self._size ## Max sized unsigned
+        value=0
+        while length:
+            byte,=struct.unpack('!B',data._get())
+            value=(value<<8)|byte
+            length-=1
+            #print length,value,byte
+        self._value=value         
+        #print "Unsigned.decode> %d (%d)" % (self._size, self._value)
+
     def _encode(self,tagnum):
         '''Variable length encoding of Unsigned'''
         value=self._value
@@ -88,21 +105,17 @@ class Unsigned(Tagged):
         bytes=[]
         while True:
             length+=1
-            bytes.append(value & 0xFF)
+            bytes.insert(0,value & 0xFF)
             value=value>>8
             if value==0:
                 break
-        print length, bytes
+        #print length, bytes
+        assert length<=self._size ## Max sized unsigned
         return struct.pack('!B'+'B'*length,self._setTag(tagnum,1,length),*bytes)
-        
-        
-        
-
-class Unsigned16(Unsigned):
-    pass
 
 class Unsigned32(Unsigned):
-    _format='I'
+    _size=4
+
     
 class Integer(Tagged):
     pass
@@ -111,8 +124,14 @@ class Boolean(Tagged):
     _format='B'
 
 class Enumerated(Unsigned):
+    def _init(self,value):
+        print "Enumerated>", self.__class__, value, self._enumeration, self._enumeration[value]
+        if type(value) in types.StringTypes:
+            value=self._enumeration[value]
+        self._value=value
+        
     def __str__(self):
-        return "%s:%d" % self._display[self._value],self._value
+        return "%s:%d" % (self._display[self._value],self._value)
         
 class Bitstring(Tagged):
     def _decode(self,data):
@@ -139,6 +158,9 @@ class ObjectIdentifier(Tagged):
             objectType=bacnet.ObjectType._enumeration[objectType]
         self.objectType=objectType
         self.instance=instance
+        
+    def __str__(self):
+        return "(%s,%d)" % (bacnet.ObjectType._display[self.objectType],self.instance)
 
 ## Composite types
 
@@ -159,7 +181,7 @@ class Application(Tagged):
         opentag=self._openTag()
         
         tag=self._getTag(data)
-        num,cls,=self._decodeTag(tag)
+        num,cls,lvt=self._decodeTag(tag)
         DataClass = self._application[num]
         element=DataClass(data=data,tag=tag)
         self._value=element._value
@@ -173,7 +195,7 @@ class Sequence(Tagged):
         opentag=self._openTag()
         print "Sequence.decode> ############", opentag
         while self._closeTag(data,opentag):
-            num,cls,=self._decodeTag()
+            num,cls,lvt=self._decodeTag()
             name, DataClass = self._sequence[num]
             element=DataClass(data=data,tag=self._getTag())
             setattr(self,name,element._value)
@@ -182,17 +204,16 @@ class Sequence(Tagged):
         self._value=self
         
     def _encode(self):
-        print "Sequence.encode>"
         encoded=[]
         for tagnum,(name,cls) in enumerate(self._sequence):
-            element=getattr(self,name)
-            assert element!=None # Assume all elements required for now.
-            print name,cls,element
+            element=getattr(self,name,None)
+            if element==None: continue 
+            print "Sequence.encode>", tagnum, name, cls, element
             if isinstance(element, Tagged):
                 encoded.append(element._encode(tagnum))
             else: ## Allow implicet conversion
                 encoded.append(cls(element)._encode(tagnum))
-        return string.join(encoded)
+        return string.join(encoded,'')
 
 class SequenceOf(Tagged):
     def _decode(self,data):
@@ -204,7 +225,7 @@ class SequenceOf(Tagged):
         self._value=[self._sequenceof()]
         last=-1
         while self._closeTag(data,opentag):
-            num,cls,=self._decodeTag()
+            num,cls,lvt=self._decodeTag()
             if num<=last: ## wrapped [strictly ordered tags]
                 self._value.append(self._sequenceof())
             last=num
@@ -226,7 +247,12 @@ class SequenceOf(Tagged):
             setattr(self,display,item)
         self._value=self
 
-## Insert display for classes
+## Misc data types
+class PropertyArrayIndex:
+    pass
+
+## Helper functions
+
 def buildDisplay(objects):
     import inspect
     for cls in objects.itervalues():

@@ -53,8 +53,28 @@ class UnconfirmedCOVNotification(COVNotification):
 class ServiceRequest(Sequence):
     pass
 
+class ComplexACK(Sequence):
+    pass
+
+class ReadProperty(ServiceRequest):
+    _servicechoice=12 # readProperty
+    _sequence=[
+               ('object',ObjectIdentifier),     # [0] 
+               ('property',PropertyIdentifier), # [1] 
+               ('index',PropertyArrayIndex),    # [2] OPTIONAL
+               ]
+
+class ReadPropertyResponse(ComplexACK):
+    _serviceChoice=12 # readProperty
+    _sequence=[
+               ('object',ObjectIdentifier),     # [0]
+               ('property',PropertyIdentifier), # [1] 
+               ('index',PropertyArrayIndex),    # [2] OPTIONAL
+               ('value',Application)            # [3]
+               ]
+
 class SubscribeCOV(ServiceRequest):
-    _servicechoice=5
+    _servicechoice=5 # subscribeCOV
     _sequence=[
                ('pid',Unsigned32),              # [0] subscriberProcessIdentifier
                ('object',ObjectIdentifier),     # [1] monitoredObjectIdentifier
@@ -62,8 +82,5 @@ class SubscribeCOV(ServiceRequest):
                ('lifetime',Unsigned),           # [3] lifetime
                ]
 
-## PDU service choice
-#BACnetConfirmedService =  { ConfirmedCOVNotification:1, SubscribeCOV:5} 
-#BACnetUnconfirmedService =  { UnconfirmedCOVNotification:2 } 
-
+## Generate derived attributes.
 buildDisplay(vars())

@@ -60,31 +60,28 @@ class BacLog:
         print "BacLog.run>", target, objects
         
         ## Setup test packet for first object
-        request=ReadPropertyRequest(*object)
-        response=ReadPropertyResponse(request)
+        readproperty=bacnet.ReadProperty()
+        readproperty.object=bacnet.ObjectIdentifier(*object)
+        readproperty.property=bacnet.PropertyIdentifier('presentValue')
+        request=ConfirmedRequest(readproperty)
 
-        ## Raw UDP data (debug)
-        #request=RawPacket("")
-        #response=ResponsePacket(None,None)
-        
-        self.work[request.pid]=(request,response,target)
+        self.work[request.pid]=(request,target)
         self.send.append((request,target))
         
         ## subscribe to COV for 2 min.
-        subscribe=SubscribeCOVRequest(object)
-        print subscribe
         subscribe=bacnet.SubscribeCOV()
-        subscribe.pid=0
+        subscribe.pid=258
         subscribe.object=bacnet.ObjectIdentifier(*object)
         subscribe.confirmed=False
         subscribe.lifetime=120
-        print binascii.b2a_hex(subscribe._encode())
-                
-        self.work[subscribe.pid]=(subscribe,SimpleACK(subscribe),target)
-        self.send.append((subscribe,target))
+        request=ConfirmedRequest(subscribe)
+
+        self.work[request.pid]=(request,target)
+        self.send.append((request,target))
         
         self.process()
-        print "BacLog.run>", response.value
+        for request,response,target in self.done:
+            print "BacLog.run>", response.value
         self.shutdown()
 
     def process(self):
@@ -104,31 +101,38 @@ class BacLog:
                 s.sendto(request._encode(),destination)
             ## Recv
             if sr:
-                (response,source)=s.recvfrom(1500)
+                (recv,source)=s.recvfrom(1500)
                 ## Process BVLC/NPDU and start of APDU
-                r=Packet(data=response)
-                print "BacLog.process> recv:", source, r.pdutype, binascii.b2a_hex(response)
+                p=Packet(data=recv)
+                print "BacLog.process> recv:", source, p.pdutype, binascii.b2a_hex(recv)
                 ## Process PDU
-                if(r.pdutype==0x3): ## ComplexACK
-                    r=ComplexACK(data=response) # Parse PDU
-                elif r.pdutype==0x2: ## SimpleACK
-                    r=SimpleACK(data=response)
-                elif r.pdutype==0x1: ## Unconfirmed Request
-                    r=UnconfirmedRequest(data=response)
+                if(p.pdutype==0x3): ## ComplexACK
+                    ## FIXME: Hard codded service choice
+                    p=ComplexACK(data=recv) # Parse PDU
+                    if p.servicechoice==BACnetConfirmedServiceChoice['readProperty']:
+                        response=bacnet.ReadPropertyResponse(data=p)
+                        print "DEBUG:",response.value
+                    
+                    print "BackLog.process>", p.servicechoice
+                elif p.pdutype==0x2: ## SimpleACK
+                    p=SimpleACK(data=recv)
+                    response=bacnet.Boolean(True)
+                    response.value=response._value
+                elif p.pdutype==0x1: ## Unconfirmed Request
+                    p=UnconfirmedRequest(data=recv)
                     ## FIXME: Hard coded packet choice.
-                    if r.servicechoice==BACnetUnconfirmedServiceChoice['unconfirmedCOVNotification']:
-                        r=UnconfirmedRequest('unconfirmedCOVNotification',response)
-                        d=bacnet.UnconfirmedCOVNotification(data=r)
-                        print "DEBUG:",d.values.presentValue.value
-                        r=None
-                if r and self.work.has_key(r.pid):
+                    if p.servicechoice==BACnetUnconfirmedServiceChoice['unconfirmedCOVNotification']:
+                        response=bacnet.UnconfirmedCOVNotification(data=p)
+                        print "DEBUG:",response.values.presentValue.value
+                    p=None
+                if p and self.work.has_key(p.pid):
                     # remove from work queue and put on done
-                    self.work[r.pid][1]._decode(response)
-                    self.done.append(self.work[r.pid])
-                    del self.work[r.pid]
+                    request,target=self.work[p.pid]
+                    del self.work[p.pid]
+                    self.done.append((request,response,target))
                 else:
                     # not work so put on data queue
-                    self.data.append((response,source))
+                    self.data.append((p,source))
             ## Error
             if se:
                 print "BacLog.process> error", se

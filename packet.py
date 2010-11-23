@@ -26,6 +26,7 @@ class Packet:
         self._tag=[0]       # current context tag
         self._data=None     # unparced data.
         self._position=0    # beginning of unparced data.
+        self._pdu=None      # payload
         
         ## BVLC
         self._add(None,'B',0x81)            # BACnet/IP
@@ -37,7 +38,7 @@ class Packet:
         ## APDU header
         self._add('_pdu','B',pdu)           # (pdutype<<4 | pduflags)
         
-        ## Unknown packets set data
+        ## TODO: Remove?
         data and self._decode(data)
         
         # Set computed fields.
@@ -57,8 +58,12 @@ class Packet:
     def _encode(self):
         '''Generate Packet Data'''
         packet=struct.Struct('!'+string.join(self._format))
+
+        ## Generate payload
+        service=self._service._encode()
+        
         ## Generated fields
-        self._length=packet.size
+        self._length=packet.size+len(service)
         self._pdu=self.pdutype<<4|self.pduflags 
 
         values=[]
@@ -67,7 +72,7 @@ class Packet:
                 values.append(getattr(self, name))
             else:
                 values.append(value)
-        return packet.pack(*values)
+        return packet.pack(*values)+service
 
     def _decode(self, data):
         '''Process Packet Data'''
@@ -142,8 +147,8 @@ class Packet:
     ## Application Primitives
     
     def _Enumerated(self,value,name=None):
-        self._add(None,'B',0x91)        # Tag: Enumerated(9) | Application | Length (1)
-        self._add(name,'B',value)       # Enumeration (0-255)
+        self._add(None,'B',0x91)                        # Tag: Enumerated(9) | Application | Length (1)
+        self._add(name,'B',value)                       # Enumeration (0-255)
         
     def _get(self,length=1):
         '''Return next slice of data'''
