@@ -1,11 +1,12 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
 import struct
-import types
-import bacnet
 import string
 import binascii
-import depreciated
+import types
+import inspect
+
+import bacnet
 
 ## PhaseII Data types
 class Tagged:
@@ -253,8 +254,14 @@ class PropertyArrayIndex:
 
 ## Helper functions
 
+def buildServiceChoice(base,objects):
+    servicechoice={}
+    for cls in objects.itervalues():
+        if inspect.isclass(cls) and issubclass(cls, base) and hasattr(cls,'_servicechoice'):
+            servicechoice[cls._servicechoice]=cls
+    return servicechoice
+
 def buildDisplay(objects):
-    import inspect
     for cls in objects.itervalues():
         if inspect.isclass(cls) and issubclass(cls, Enumerated) and hasattr(cls, '_enumeration'):
             cls._display=dict((value, key) for key, value in cls._enumeration.iteritems())

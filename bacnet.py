@@ -36,7 +36,11 @@ class SequenceOfPropertyValue(SequenceOf):
 
 ## PhaseII PDU packets
 
-class COVNotification(Sequence): # SEQUENCE
+class UnconfirmedServiceRequest(Sequence):
+    pass
+
+class UnconfirmedCOVNotification(UnconfirmedServiceRequest):
+    _servicechoice=2 # unconfirmedCOVNotification
     _sequence=[
                ('pid',Unsigned32),                      # [0] subscriberProcessIdentifier
                ('device',ObjectIdentifier),             # [1] initiatingDeviceIdentifier
@@ -45,11 +49,6 @@ class COVNotification(Sequence): # SEQUENCE
                ('values',SequenceOfPropertyValue),      # [4] listOfValues
                ]
     
-class ConfirmedCOVNotification(COVNotification):
-    pass
-class UnconfirmedCOVNotification(COVNotification):
-    pass
-
 class ServiceRequest(Sequence):
     pass
 
@@ -65,7 +64,7 @@ class ReadProperty(ServiceRequest):
                ]
 
 class ReadPropertyResponse(ComplexACK):
-    _serviceChoice=12 # readProperty
+    _servicechoice=12 # readProperty
     _sequence=[
                ('object',ObjectIdentifier),     # [0]
                ('property',PropertyIdentifier), # [1] 
@@ -81,6 +80,11 @@ class SubscribeCOV(ServiceRequest):
                ('confirmed',Boolean),           # [2] issueConfirmedNotifications
                ('lifetime',Unsigned),           # [3] lifetime
                ]
+
+## Create generated classes/dictionaries
+ConfirmedServiceChoice=buildServiceChoice(ServiceRequest,vars()) 
+ConfirmedServiceResponseChoice=buildServiceChoice(ComplexACK,vars()) 
+UnconfirmedServiceChoice=buildServiceChoice(UnconfirmedServiceRequest,vars()) 
 
 ## Generate derived attributes.
 buildDisplay(vars())

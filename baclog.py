@@ -10,11 +10,9 @@ import ConfigParser
 #import postgres as database
 import console as database
 
+import packet
 import bacnet
-
-from depreciated import *
-from packet import *
-from tagged import *
+import tagged
 
 #### Main Class
 
@@ -63,7 +61,7 @@ class BacLog:
         readproperty=bacnet.ReadProperty()
         readproperty.object=bacnet.ObjectIdentifier(*object)
         readproperty.property=bacnet.PropertyIdentifier('presentValue')
-        request=ConfirmedRequest(readproperty)
+        request=packet.ConfirmedRequest(readproperty)
 
         self.work[request.pid]=(request,target)
         self.send.append((request,target))
@@ -74,7 +72,7 @@ class BacLog:
         subscribe.object=bacnet.ObjectIdentifier(*object)
         subscribe.confirmed=False
         subscribe.lifetime=120
-        request=ConfirmedRequest(subscribe)
+        request=packet.ConfirmedRequest(subscribe)
 
         self.work[request.pid]=(request,target)
         self.send.append((request,target))
@@ -103,27 +101,22 @@ class BacLog:
             if sr:
                 (recv,source)=s.recvfrom(1500)
                 ## Process BVLC/NPDU and start of APDU
-                p=Packet(data=recv)
+                p=packet.Packet(data=recv)
                 print "BacLog.process> recv:", source, p.pdutype, binascii.b2a_hex(recv)
                 ## Process PDU
                 if(p.pdutype==0x3): ## ComplexACK
-                    ## FIXME: Hard codded service choice
-                    p=ComplexACK(data=recv) # Parse PDU
-                    if p.servicechoice==BACnetConfirmedServiceChoice['readProperty']:
-                        response=bacnet.ReadPropertyResponse(data=p)
-                        print "DEBUG:",response.value
-                    
-                    print "BackLog.process>", p.servicechoice
+                    p=packet.ComplexACK(data=recv) # Parse PDU
+                    print "BacLog.process>", p.servicechoice 
+                    response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
+                    print "DEBUG:",response.value
                 elif p.pdutype==0x2: ## SimpleACK
-                    p=SimpleACK(data=recv)
+                    p=packet.SimpleACK(data=recv)
                     response=bacnet.Boolean(True)
                     response.value=response._value
                 elif p.pdutype==0x1: ## Unconfirmed Request
-                    p=UnconfirmedRequest(data=recv)
-                    ## FIXME: Hard coded packet choice.
-                    if p.servicechoice==BACnetUnconfirmedServiceChoice['unconfirmedCOVNotification']:
-                        response=bacnet.UnconfirmedCOVNotification(data=p)
-                        print "DEBUG:",response.values.presentValue.value
+                    p=packet.UnconfirmedRequest(data=recv)
+                    response=bacnet.UnconfirmedServiceChoice[p.servicechoice](data=p)
+                    print "DEBUG:",response.values.presentValue.value
                     p=None
                 if p and self.work.has_key(p.pid):
                     # remove from work queue and put on done
