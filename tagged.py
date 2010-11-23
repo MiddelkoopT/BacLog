@@ -1,18 +1,28 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
 import struct
+import types
+import bacnet
+import string
+import depreciated
 
 ## PhaseII Data types
 class Tagged:
-    def __init__(self,data=None,tag=None):
-        print "Tagged> %s " % self.__class__
-        self._tag=tag     ## Current tag.
+    def __init__(self,*args,**kwargs):
+        '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
+        print "Tagged> %s " % self.__class__, args, kwargs
         self._value=None  ## Current "Value"
+
+        ## Little messy but makes objects behave nicely.
+        self._tag=kwargs.get('tag',None)     ## Current tag.
+        data=kwargs.get('data',None)
+        if len(args)>0:
+            self._init(*args)
         if data:
             self._decode(data)
             
     def _getTag(self,data=None):
-        """Update current tag and return tag value, no data indicates last tag"""
+        '''Update current tag and return tag value, no data indicates last tag'''
         if data==None:
             return self._tag
         tag=data._get()
@@ -21,6 +31,10 @@ class Tagged:
             #print "Tagged.getTag> 0x%02x" % tag, self._decodeTag(tag)
         self._tag=tag
         return tag
+    
+    def _setTag(self,num,cls,lvt):
+        self._tag=(num << 4) | (cls << 3) | (lvt)
+        return self._tag
         
     def _decodeTag(self,tag=None):
         if tag==None:
@@ -37,7 +51,7 @@ class Tagged:
             return (self._tag&0xF0)>>4
         
     def _closeTag(self,data,tag=None):
-        """Returns True if more data until matched tag"""
+        '''Returns True if more data until matched tag'''
         if self._getTag(data)==None:
             return None
         if (self._tag&0x0F)!=0x0F:
@@ -45,6 +59,18 @@ class Tagged:
         if tag!=None:
             assert (self._tag>>4 == tag)
         return False
+
+    ## Default methods (should do the right thing)
+    
+    def _init(self,value):
+        '''Default constructor just passes value to self._value'''
+        self._value=value
+
+    def _encode(self,tagnum=None):
+        '''Default fixed formatting found in self._format'''
+        data=struct.Struct('!B'+self._format)
+        length=data.size-1
+        return data.pack(self._setTag(tagnum,1,length),self._value)
 
 ## Basic Types        
 
@@ -55,18 +81,34 @@ class Unsigned(Tagged):
         assert length!=3 # unsupported unpack
         self._value,=struct.unpack([None,'!B','!H'][length],data._get(length))
         #print "Unsigned.decode>", self._value
+    def _encode(self,tagnum):
+        '''Variable length encoding of Unsigned'''
+        value=self._value
+        length=0
+        bytes=[]
+        while True:
+            length+=1
+            bytes.append(value & 0xFF)
+            value=value>>8
+            if value==0:
+                break
+        print length, bytes
+        return struct.pack('!B'+'B'*length,self._setTag(tagnum,1,length),*bytes)
+        
+        
+        
 
 class Unsigned16(Unsigned):
     pass
 
 class Unsigned32(Unsigned):
-    pass
-
+    _format='I'
+    
 class Integer(Tagged):
     pass
 
 class Boolean(Tagged):
-    pass
+    _format='B'
 
 class Enumerated(Unsigned):
     def __str__(self):
@@ -87,6 +129,16 @@ class ObjectIdentifier(Tagged):
         self.instance=      (object&0x003FFFFF)
         self._value=(self.objectType,self.instance)
         #print "ObjectIdentifier.decode> %08x" % object , self._value
+        
+    def _encode(self,tagnum=None):
+        '''Encode as application (unsupported) unless tagnum given'''
+        return struct.pack('!BI',self._setTag(tagnum,1,4),self.objectType << 22 | self.instance)
+
+    def _init(self,objectType,instance):
+        if type(objectType) in types.StringTypes:
+            objectType=bacnet.ObjectType._enumeration[objectType]
+        self.objectType=objectType
+        self.instance=instance
 
 ## Composite types
 
@@ -107,9 +159,9 @@ class Application(Tagged):
         opentag=self._openTag()
         
         tag=self._getTag(data)
-        num,cls,lvt=self._decodeTag(tag)
+        num,cls,=self._decodeTag(tag)
         DataClass = self._application[num]
-        element=DataClass(data,tag)
+        element=DataClass(data=data,tag=tag)
         self._value=element._value
         #print "Application.decode>", element._value
 
@@ -121,9 +173,9 @@ class Sequence(Tagged):
         opentag=self._openTag()
         print "Sequence.decode> ############", opentag
         while self._closeTag(data,opentag):
-            num,cls,lvt=self._decodeTag()
+            num,cls,=self._decodeTag()
             name, DataClass = self._sequence[num]
-            element=DataClass(data,self._getTag())
+            element=DataClass(data=data,tag=self._getTag())
             setattr(self,name,element._value)
             print "Sequence.decode>", name, element._value
         print "Sequence.decode> -----------", opentag
@@ -131,7 +183,16 @@ class Sequence(Tagged):
         
     def _encode(self):
         print "Sequence.encode>"
-        return 
+        encoded=[]
+        for tagnum,(name,cls) in enumerate(self._sequence):
+            element=getattr(self,name)
+            assert element!=None # Assume all elements required for now.
+            print name,cls,element
+            if isinstance(element, Tagged):
+                encoded.append(element._encode(tagnum))
+            else: ## Allow implicet conversion
+                encoded.append(cls(element)._encode(tagnum))
+        return string.join(encoded)
 
 class SequenceOf(Tagged):
     def _decode(self,data):
@@ -143,12 +204,12 @@ class SequenceOf(Tagged):
         self._value=[self._sequenceof()]
         last=-1
         while self._closeTag(data,opentag):
-            num,cls,lvt=self._decodeTag()
+            num,cls,=self._decodeTag()
             if num<=last: ## wrapped [strictly ordered tags]
                 self._value.append(self._sequenceof())
             last=num
             name, DataClass = self._sequenceof._sequence[num]
-            element=DataClass(data,self._getTag())
+            element=DataClass(data=data,tag=self._getTag())
             setattr(self._value[-1],name,element._value)
             print "SequenceOf.decode>", len(self._value), name, element._value
         
@@ -164,3 +225,10 @@ class SequenceOf(Tagged):
             assert display not in dir(self) 
             setattr(self,display,item)
         self._value=self
+
+## Insert display for classes
+def buildDisplay(objects):
+    import inspect
+    for cls in objects.itervalues():
+        if inspect.isclass(cls) and issubclass(cls, Enumerated) and hasattr(cls, '_enumeration'):
+            cls._display=dict((value, key) for key, value in cls._enumeration.iteritems())

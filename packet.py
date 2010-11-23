@@ -10,7 +10,7 @@ import depreciated
 from depreciated import *
 
 class RawPacket:
-    """Test packet class (send raw hex encoded packet)"""
+    '''Test packet class (send raw hex encoded packet)'''
     def __init__(self,data=None,pid=None):
         self.data=data
         self.pid=pid
@@ -19,7 +19,7 @@ class RawPacket:
         return binascii.unhexlify(self.data)
 
 class Packet:
-    """Magic Packet Class (somewhat an abstract class)."""
+    '''Magic Packet Class (somewhat an abstract class).'''
     def __init__(self,control=None,pdu=None,data=None):
         self._field=[]      # (name,value) of variable (None for constant/default)
         self._format=[]     # format of the field
@@ -38,7 +38,7 @@ class Packet:
         self._add('_pdu','B',pdu)           # (pdutype<<4 | pduflags)
         
         ## Unknown packets set data
-        data and self(data)
+        data and self._decode(data)
         
         # Set computed fields.
         if(self._pdu!=None):
@@ -52,16 +52,10 @@ class Packet:
             setattr(self, name, value)
         
     def __str__(self):
-        return "%s %d" % (binascii.b2a_hex(self()), self._length)
+        return "%s %d" % (binascii.b2a_hex(self._encode()), self._length)
 
-    def __call__(self, data=None):
-        if(data==None):
-            return self._encode()
-        else:
-            self._decode(data)
-        
     def _encode(self):
-        """Generate Packet Data"""
+        '''Generate Packet Data'''
         packet=struct.Struct('!'+string.join(self._format))
         ## Generated fields
         self._length=packet.size
@@ -76,7 +70,7 @@ class Packet:
         return packet.pack(*values)
 
     def _decode(self, data):
-        """Process Packet Data"""
+        '''Process Packet Data'''
         #print "Packet.decode> ", binascii.b2a_hex(data)
         packet=struct.Struct('!'+string.join(self._format))
         values=packet.unpack_from(data)
@@ -152,9 +146,9 @@ class Packet:
         self._add(name,'B',value)       # Enumeration (0-255)
         
     def _get(self,length=1):
-        """Return next slice of data"""
+        '''Return next slice of data'''
         if self._position+length >= len(self._data):
-           return None
+            return None
         self._position+=length
         return self._data[self._position-length:self._position]
     

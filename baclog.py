@@ -4,20 +4,17 @@
 import socket
 import select
 import binascii
-#import struct
-#import string
-#import types
 import ConfigParser
 
 # Use which data store.  [Database.driver stores value; not implemented so pydev will follow]
 #import postgres as database
 import console as database
 
+import bacnet
 
 from depreciated import *
 from packet import *
 from tagged import *
-from bacnet import *
 
 #### Main Class
 
@@ -74,8 +71,15 @@ class BacLog:
         self.send.append((request,target))
         
         ## subscribe to COV for 2 min.
-        subscribe=OLDSubscribeCOVRequest(object)
-        print "BacLog.run>", subscribe
+        subscribe=SubscribeCOVRequest(object)
+        print subscribe
+        subscribe=bacnet.SubscribeCOV()
+        subscribe.pid=0
+        subscribe.object=bacnet.ObjectIdentifier(*object)
+        subscribe.confirmed=False
+        subscribe.lifetime=120
+        print binascii.b2a_hex(subscribe._encode())
+                
         self.work[subscribe.pid]=(subscribe,SimpleACK(subscribe),target)
         self.send.append((subscribe,target))
         
@@ -96,8 +100,8 @@ class BacLog:
             ## Send
             if sw and self.send:
                 (request,destination)=self.send.pop()
-                print "BacLog.process> send:", destination, request.pid, request 
-                s.sendto(request(),destination)
+                print "BacLog.process> send:", destination, request.pid, request
+                s.sendto(request._encode(),destination)
             ## Recv
             if sr:
                 (response,source)=s.recvfrom(1500)
@@ -114,12 +118,12 @@ class BacLog:
                     ## FIXME: Hard coded packet choice.
                     if r.servicechoice==BACnetUnconfirmedServiceChoice['unconfirmedCOVNotification']:
                         r=UnconfirmedRequest('unconfirmedCOVNotification',response)
-                        d=UnconfirmedCOVNotification(r)
+                        d=bacnet.UnconfirmedCOVNotification(data=r)
                         print "DEBUG:",d.values.presentValue.value
                         r=None
                 if r and self.work.has_key(r.pid):
                     # remove from work queue and put on done
-                    self.work[r.pid][1](response)
+                    self.work[r.pid][1]._decode(response)
                     self.done.append(self.work[r.pid])
                     del self.work[r.pid]
                 else:

@@ -2,7 +2,8 @@
 
 from tagged import *
 
-## PhaseII data types
+## PhaseII Enumerations
+
 class PropertyIdentifier(Enumerated):
     ## TODO: Remove/Merge BACnetPropertyIdentifier
     _enumeration={
@@ -11,7 +12,15 @@ class PropertyIdentifier(Enumerated):
                   'notificationClass':17,
                   'statusFlags':111
                   }
-    _display=dict((value, key) for key, value in _enumeration.iteritems())
+
+class ObjectType(Enumerated):
+    _enumeration={
+                  'binary-input':3,
+                  'binary-output':4,
+                  'device':8
+                  }
+
+## PhaseII Data types
         
 class PropertyValue(Sequence):
     _sequence=[
@@ -26,6 +35,7 @@ class SequenceOfPropertyValue(SequenceOf):
     _sequencekey=0
 
 ## PhaseII PDU packets
+
 class COVNotification(Sequence): # SEQUENCE
     _sequence=[
                ('pid',Unsigned32),                      # [0] subscriberProcessIdentifier
@@ -40,18 +50,20 @@ class ConfirmedCOVNotification(COVNotification):
 class UnconfirmedCOVNotification(COVNotification):
     pass
 
-class ServiceRequest(Tagged):
+class ServiceRequest(Sequence):
     pass
 
 class SubscribeCOV(ServiceRequest):
-    _servicechoice=''
+    _servicechoice=5
     _sequence=[
                ('pid',Unsigned32),              # [0] subscriberProcessIdentifier
                ('object',ObjectIdentifier),     # [1] monitoredObjectIdentifier
                ('confirmed',Boolean),           # [2] issueConfirmedNotifications
                ('lifetime',Unsigned),           # [3] lifetime
                ]
-    
-## PDU Requests
-BACnetConfirmedService =  { ConfirmedCOVNotification:1 } 
-BACnetUnconfirmedService =  { UnconfirmedCOVNotification:2 } 
+
+## PDU service choice
+#BACnetConfirmedService =  { ConfirmedCOVNotification:1, SubscribeCOV:5} 
+#BACnetUnconfirmedService =  { UnconfirmedCOVNotification:2 } 
+
+buildDisplay(vars())

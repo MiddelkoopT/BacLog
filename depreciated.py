@@ -31,7 +31,7 @@ class UnconfirmedRequest(Packet):
         self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
                   servicechoice and BACnetUnconfirmedServiceChoice[servicechoice])
         if(data):
-            self(data)
+            self._decode(data)
 
 class ComplexACK(Packet):
     def __init__(self,servicechoice=None,data=None):
@@ -41,13 +41,13 @@ class ComplexACK(Packet):
         self._add('servicechoice','B',  # serviceChoice/ACK [no tag]
                   servicechoice and BACnetConfirmedServiceChoice[servicechoice])
         if(data):
-            self(data)
+            self._decode(data)
 
 class SimpleACK(Packet):
     def __init__(self,request=None,data=None):
         Packet.__init__(self,0x00,0x20)                 # Reply Present ; SimpleACK | 0x00
         self._add('pid','B',request and request.pid)    # original request ID
-        self._add('servicechoice','B',request and request.servicechoice)  # serviceChoice/ACK
+        self._add('servicechoice','B',request and request._servicechoice)  # serviceChoice/ACK
         if(data):
             self(data)
 
@@ -71,7 +71,7 @@ class ReadPropertyResponse(ComplexACK):
         self._Enumerated(None,'value')
         self._closeTag()
 
-class OLDSubscribeCOVRequest(ConfirmedRequest):
+class SubscribeCOVRequest(ConfirmedRequest):
     def __init__(self,object,lifetime=120):
         ConfirmedRequest.__init__(self,'subscribeCOV')
         self._addUnsigned32(0)      # subscriberProcessIdentifier
