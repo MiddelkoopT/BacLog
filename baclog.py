@@ -65,9 +65,9 @@ class BacLog:
         subscribe.lifetime=120
         self.addWork(subscribe, devices[0][0])
         
-        #for target,instance in devices:
-        #    readproperty=bacnet.ReadProperty('device',instance,'objectList')
-        #    self.addWork(readproperty,target)
+        for target,instance in devices:
+            readproperty=bacnet.ReadProperty('device',instance,'objectList')
+            self.addWork(readproperty,target)
 
         self.process()
         for request,response,target in self.done:

@@ -2,7 +2,11 @@
 
 import tagged
 
-from tagged import Enumerated, Sequence, SequenceOf, Application, Unsigned32, Unsigned, Boolean, ObjectIdentifier
+from tagged import Unsigned32, Unsigned, Boolean, ObjectIdentifier, Property, Enumerated, Sequence, SequenceOf, Array, Tagged
+
+## Data types
+class ObjectIdentifierArray(Array):
+    _type=tagged.ObjectIdentifier
 
 ## PhaseII Enumerations
 
@@ -11,14 +15,16 @@ class PropertyIdentifier(Enumerated):
                   'presentValue':85,
                   'objectList':76,
                   'notificationClass':17,
-                  'statusFlags':111
+                  'statusFlags':111,
                   }
 
 class ObjectType(Enumerated):
     _enumeration={
+                  'analog-value':2,
                   'binary-input':3,
                   'binary-output':4,
-                  'device':8
+                  'device':8,
+                  'file':10,
                   }
 
 ## PhaseII Data types
@@ -27,7 +33,7 @@ class PropertyValue(Sequence):
     _sequence=[
                ('property',PropertyIdentifier),         # [0] propertyIdentifier
                ('index',Unsigned),                      # [1] propertyArrayIndex OPTIONAL
-               ('value',Application),                   # [2] value ASN.1
+               ('value',Property),                      # [2] value ASN.1
                ('priority',Unsigned),                   # [3] priority OPTIONAL
                ]
 
@@ -43,7 +49,8 @@ class ConfirmedServiceRequest(Sequence):
 class UnconfirmedServiceRequest(Sequence):
     _pdutype=0x1 # UnconfirmedRequest
 
-#   _pdutype=0x2 # SimpleACK
+class SimpleACK(Tagged):
+    _pdutype=0x2 # SimpleACK
 
 class ConfirmedServiceACK(Sequence):
     _pdutype=0x3 # ComplexACK
@@ -79,8 +86,9 @@ class ReadPropertyResponse(ConfirmedServiceACK):
                ('object',ObjectIdentifier),     # [0] objectIdentifer
                ('property',PropertyIdentifier), # [1] propertyIdentifier
                ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
-               ('value',Application)            # [3] propertyValue
+               ('value',Property),              # [3] propertyValue ASN.1
                ]
+    #_context={'value':('property','object')} # Hard coded in Sequence.
 
 class SubscribeCOV(ConfirmedServiceRequest):
     _servicechoice=5 # subscribeCOV
@@ -91,10 +99,17 @@ class SubscribeCOV(ConfirmedServiceRequest):
                ('lifetime',Unsigned),           # [3] lifetime
                ]
 
+## (property, objectType=None) : DataClass mapping
+PropertyMap={
+             'objectList':ObjectIdentifierArray,
+             }
+
+
 ## Create generated classes/dictionaries
 ConfirmedServiceChoice=tagged.buildServiceChoice(ConfirmedServiceRequest,vars()) 
 ConfirmedServiceResponseChoice=tagged.buildServiceChoice(ConfirmedServiceACK,vars()) 
 UnconfirmedServiceChoice=tagged.buildServiceChoice(UnconfirmedServiceRequest,vars()) 
 
 ## Generate derived attributes.
+tagged.buildProperty(PropertyMap)
 tagged.buildDisplay(vars())

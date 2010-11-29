@@ -9,10 +9,10 @@ import bacnet
 
 ## PhaseII Data types
 class Tagged:
+    _value=None
     def __init__(self,*args,**kwargs):
         '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
         #print "Tagged> %s " % self.__class__, args, kwargs
-        self._value=None    ## Current "Value"
 
         ## Little messy but makes objects behave nicely.
         self._tag=kwargs.get('tag',None)     ## Current tag.
@@ -130,10 +130,13 @@ class Enumerated(Unsigned):
         if type(value) in types.StringTypes:
             value=self._enumeration[value]
         self._value=value
-        
+
+    def __call__(self,key):
+        return self._enumerated[key]
+
     def __str__(self):
         return "%s(%d)" % (self._display[self._value],self._value)
-        
+
 class Bitstring(Tagged):
     def _decode(self,data):
         num,cls,length=self._decodeTag() #@UnusedVariable
@@ -143,13 +146,12 @@ class Bitstring(Tagged):
 class ObjectIdentifier(Tagged):
     def _decode(self,data):
         num,cls,length=self._decodeTag() #@UnusedVariable
-        print self._decodeTag()
         assert length==4
         object,=struct.unpack('!L',data._get(length))
         self.objectType=int((object&0xFFC00000)>>22)
         self.instance=      (object&0x003FFFFF)
         self._value=(self.objectType,self.instance)
-        print "ObjectIdentifier.decode> %08x" % object , self._value
+        #print "ObjectIdentifier.decode> %08x" % object , self._value
         
     def _encode(self,tagnum=None):
         '''Encode as application (unsupported) unless tagnum given'''
@@ -161,10 +163,8 @@ class ObjectIdentifier(Tagged):
         self.objectType=objectType
         self.instance=instance
         
-    def __str__(self):
-        return "(%s,%d)" % (bacnet.ObjectType._display[self.objectType],self.instance)
-
-## Composite types
+    def __repr__(self):
+        return "<%s,%d>" % (bacnet.ObjectType._display[self.objectType],self.instance)
 
 class Application(Tagged):
     _application=[
@@ -180,7 +180,7 @@ class Application(Tagged):
                   Enumerated,       # [A9] Enumerated
                   None,             # [A10] Date
                   None,             # [A11] Time
-                  ObjectIdentifier,  # [A12] ObjectIdentifier
+                  ObjectIdentifier, # [A12] ObjectIdentifier
                   ]
     
     def _decode(self,data):
@@ -189,22 +189,46 @@ class Application(Tagged):
         num,cls,lvt=self._decodeTag(tag) #@UnusedVariable
         DataClass = self._application[num]
         element=DataClass(data=data,tag=tag)
-        self._value=element._value
+        self.value=element._value
         #print "Application.decode>", element._value
 
         if opentag!=None:
-            self._closeTag(data,opentag)        
+            self._closeTag(data,opentag)
+
+    def __str__(self):
+        return "<%s>" % self.value
+
+## Property's often need context (property,object type) to decde.
+class Property(Tagged):
+    '''Property -- ugly containment!'''
+    _propertymap=None ## delayed initialization
+    _type=Application
+    def _init(self,object,property):
+        print "Property.init>", object, property
+        _type=self._propertymap.get(property._value,None) or self._propertymap.get((property,object.objectType),None)
+        if _type!=None: ## If none found use default
+            self._type=_type
+        print "Property.init>", self._type
+        
+    def _decode(self,data):
+        self._value=self._type(data=data,tag=self._tag)
+
+## Composite types
 
 class Sequence(Tagged):
+    _sequence=None
     def _decode(self,data):
         opentag=self._openTag()
         #print "Sequence.decode> ############", opentag
         while self._closeTag(data,opentag):
             num,cls,lvt=self._decodeTag() #@UnusedVariable
             name, DataClass = self._sequence[num]
-            element=DataClass(data=data,tag=self._getTag())
-            setattr(self,name,element._value)
-            #print "Sequence.decode>", name, element._value
+            if issubclass(DataClass, Property): ## Hard coded context for Property
+                element=Property(self.object,self.property,data=data,tag=self._getTag())._value
+            else:
+                element=DataClass(data=data,tag=self._getTag())
+            setattr(self,name,element)
+            #print "Sequence.decode>", name, element
         #print "Sequence.decode> -----------", opentag
         self._value=self
         
@@ -230,12 +254,12 @@ class Sequence(Tagged):
         return string.join(output,'')  
 
 class SequenceOf(Tagged):
+    _sequenceof=None
+    _sequencekey=None
     def _decode(self,data):
-        ## Assume Context Tagging
+        #print "SequenceOf.decode> ############", opentag
         opentag=self._openTag() 
-        print "SequenceOf.decode> ############", opentag
-        ## Only decode sequence of sequence
-        assert issubclass(self._sequenceof, Sequence)
+        assert issubclass(self._sequenceof, Sequence) ## Only decode sequence of sequence
         self._value=[self._sequenceof()]
         last=-1
         while self._closeTag(data,opentag):
@@ -245,21 +269,36 @@ class SequenceOf(Tagged):
             last=num
             name, DataClass = self._sequenceof._sequence[num]
             element=DataClass(data=data,tag=self._getTag())
-            setattr(self._value[-1],name,element._value)
-            print "SequenceOf.decode>", len(self._value), name, element._value
-        
-        print "SequenceOf.decode> ------------", opentag
+            setattr(self._value[-1],name,element)
+            #print "SequenceOf.decode>", len(self._value), name, element
+        #print "SequenceOf.decode> ------------", opentag
 
         ## Magic to make sequenceof to use _sequencekey for attiributes
         if self._sequencekey==None:
             return
         for item in self._value:
             name,cls = self._sequenceof._sequence[self._sequencekey]
-            index=getattr(item,name,cls)
+            index=getattr(item,name,cls)._value
             display=cls._display[index]
             assert display not in dir(self) 
             setattr(self,display,item)
         self._value=self
+
+class Array(Tagged):
+    _type=None
+    def _decode(self,data):
+        opentag=self._openTag()
+        #print "Array.decode> ===========", opentag
+        self._value=[]
+        while self._closeTag(data,opentag):
+            num,cls,lvt=self._decodeTag() #@UnusedVariable
+            item=self._type(data=data,tag=self._getTag())
+            self._value.append(item)
+            #print "Array.decode>", item
+        #print "Array.decode> -----------", opentag
+
+    def __str__(self):
+        return str(self._value)
 
 ## Helper functions
 
@@ -274,3 +313,14 @@ def buildDisplay(objects):
     for cls in objects.itervalues():
         if inspect.isclass(cls) and issubclass(cls, Enumerated) and hasattr(cls, '_enumeration'):
             cls._display=dict((value, key) for key, value in cls._enumeration.iteritems())
+
+def buildProperty(mapping):
+    '''Replaces enumerated text values with enumeration values for Property type mapping'''
+    _map={}
+    for key,value in mapping.items():
+        if type(key)!=types.TupleType:
+            _map[bacnet.PropertyIdentifier._enumeration[key]]=value
+        else:
+            _map[(bacnet.PropertyIdentifier._enumeration[key],
+                  bacnet.ObjectType._enumeration[key])]=value
+    Property._propertymap=_map
