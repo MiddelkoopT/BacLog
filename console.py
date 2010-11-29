@@ -1,4 +1,3 @@
-#!/usr/bin/python
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Simple console based Database Driver (config comes from baclog.ini)
 
