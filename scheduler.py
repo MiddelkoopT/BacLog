@@ -1,98 +1,175 @@
 #!/usr/bin/python
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
+## Main I/O and Task scheduler
 
-## Main i/o scheduler
+import select
+import socket
+import binascii
+
+import packet
+import bacnet
 
 class Task:
     tid=0
     def __init__(self):
         Task.tid+=1
         self.tid=Task.tid
-        self.target=self.run()
-        self.send=self.target.send
-        
-    def run(self):
-        print 'Task.run> startup'
-        result = yield Message("A%d"%self.tid,10)
-        print 'Task.run> A', self.tid, result
-        result = yield Message("B%d"%self.tid,20)
-        print 'Task.run> B', self.tid, result
-        return
+        self.send=self.run().send
 
-class MessageHandler:
-    def send(self,message):
-        print "MessageHandler.send>", message
+class Work:
+    def __init__(self,tid,request=None):
+        self.tid=tid
+        self.request=request
+        self.response=None
 
 class Message:
-    _handler=MessageHandler()  ## private to scheduler
+    _handler=None
     def __init__(self,remote,message=None,wait=True):
         self.remote=remote
         self.message=message
         self.wait=wait
+
     def __str__(self):
         return "[[%s:%s]]" % (self.remote,self.message)
-    
-class Work:
-    def __init__(self,task,send=None):
-        self.task=task
-        self.send=send
-        self.recv=None
+
+
+class MessageHandler:
+    def __init__(self, address, port):
+        print "MessageHandler>", address, port
+        self.send=[]
+        self.recv=[]
+        self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        self.socket.bind((address,port))
+        self.socket.setblocking(0)
+        Message._handler=self
         
+    def put(self,work):
+        invoke=work.tid
+        request=work.request.message
+        remote=work.request.remote
+
+        p=packet.PDU[request._pdutype]()
+        p.invoke=invoke
+        p.servicechoice=request._servicechoice
+        print "MessageHandler.put>", remote, invoke, p._display(request)
+        self.send.append((remote,p._encode(request)))
+        
+    def write(self):
+        remote,data=self.send.pop(0)
+        sent=self.socket.sendto(data, remote)
+        assert sent==len(data) ## Send entire packet.
+        print "MessageHandler.write>", remote
+        
+    def read(self):
+        (recv,remote)=self.socket.recvfrom(1500)
+        self.recv.append((recv,remote))
+        print "MessageHandler.read>", remote
+        
+    def get(self):
+        recv,remote=self.recv.pop(0)
+        ## Process BVLC/NPDU and start of APDU
+        p=packet.Packet(data=recv)
+        print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
+        ## Process PDU
+        if(p.pdutype==0x3): ## ComplexACK
+            p=packet.ComplexACK(data=recv) # Parse PDU
+            response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
+        elif p.pdutype==0x2: ## SimpleACK
+            p=packet.SimpleACK(data=recv)
+            response=bacnet.Boolean(True)
+            response.value=response._value
+        elif p.pdutype==0x1: ## Unconfirmed Request
+            p=packet.UnconfirmedRequest(data=recv)
+            service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)
+            response=service and service(data=p)
+        
+        if not response:
+            return False ## discarded data.
+        work=Work(p.invoke)
+        work.response=Message(remote,response)
+        return work
+    
+    def shutdown(self):
+        self.socket.close()
+
 class Scheduler:
     def __init__(self):
+        print "Scheduler>"
         self.task={}
         self.work=[]
         self.done=[]
+        
+        self.handler=[]
+        self.socket={}
     
+    def addHandler(self,handler):
+        self.handler.append(handler)
+        self.socket[handler.socket]=handler
+            
     def add(self,task):
         assert isinstance(task, Task)
         self.task[task.tid]=task
-        self.done.append(Work(task)) ## Prim
-    
+        self.done.append(Work(task.tid)) ## Prime
+        
     def run(self):
         print "Scheduler.run> start"
-        tick=100
-        while self.work or self.done:
-            for work in self.work:
-                tick+=1
-                #print "Scheduler.run> work", tick, work.task.tid
-                ## Send message
-                print "Scheduler.run> send", tick, work.task.tid, work.send
-                ## Recv message 
-                work.recv=work.send
-                work.recv.message+=1
-                self.done.append(work)
-                print "Scheduler.run> recv", tick, work.task.tid, work.send
-            ## Reset work queue
-            self.work=[] 
-                
-            ## Deliver responses.
-            for work in self.done:
-                tick+=1
-                print "Scheduler.run> done", tick, work.task.tid, work.recv
+        while self.task:
+            block=5 ## start off with blocking.
+            if self.done: 
+                block=0
+            while True:
+                print "Scheduler.run> select"
+                r,w,x=[],[],[]
+                for h in self.handler:
+                    r.append(h.socket)
+                    h.send and w.append(h.socket)
+                    x.append(h.socket)
+                (sr,sw,sx) = select.select(r,w,x,block)
+                assert not sx
+
+                ## Nothing to do.
+                if (not sr) and (not sw) and (not sx):
+                    print "Scheduler.run> empty"
+                    break
+
+                block=0 ## Data exists
+
+                ## Send
+                for s in sw:
+                    print "Scheduler.run> write"
+                    handler=self.socket[s]
+                    handler.write()
+    
+                ## Recv
+                for s in sr:
+                    print "Scheduler.run> read"
+                    handler=self.socket[s]
+                    handler.read()
+            
+            ## Pair responses
+            for h in self.handler:
+                while h.recv:
+                    work=h.get()  ## Handlers do the paring.
+                    self.done.append(work)
+                    print "Scheduler.run> pair", work
+            
+            ## Deliver responses to tasks and collect new messages.
+            while self.done:
                 try:
-                    send=work.task.send(work.recv)
-                    ## Process message.
+                    work=self.done.pop(0)
+                    task=self.task[work.tid]
+                    print "Scheduler.run> done", work.tid, work.response
+                    send=task.send(work.response) ## Main coroutine entry point
+                    print "Scheduler.run> work", send
+                    send._handler.put(Work(work.tid,send))
                 except StopIteration:
-                    print "Scheduler.run> %d exited" % work.task.tid
-                    del self.task[work.task.tid]
+                    print "Scheduler.run> %d exited" % work.tid
+                    del self.task[work.tid]
                     continue
-                ## Append new work.
-                self.work.append(Work(work.task,send))
-            ## reset done queue
-            self.done=[]
 
-        print "Scheduler.run> exit", self.work, self.done
+        print "Scheduler.run> done", self.work, self.done
         assert not self.work and not self.done
+        
+    def shutdown(self):
+        Message._handler.shutdown()
 
-
-
-if __name__=='__main__':
-    s=Scheduler()
-    t1=Task()
-    t2=Task()
-    
-    s.add(t1)
-    s.add(t2)
-    
-    s.run()
