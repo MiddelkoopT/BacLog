@@ -4,9 +4,9 @@
 import socket
 import select
 import binascii
-import ConfigParser
+import ConfigParser as configparser
 
-# Use which data store.  [Database.driver stores value; not implemented so pydev will follow]
+## Use which data store.  [Database.driver stores value; not implemented]
 #import postgres as database
 import console as database
 
@@ -19,7 +19,7 @@ class BacLog:
     def __init__(self):
         
         ## Configure
-        self.config=ConfigParser.ConfigParser()
+        self.config=configparser.ConfigParser()
         self.config.read(('baclog.ini','local.ini'))
         
         ## Load database driver
