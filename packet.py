@@ -1,7 +1,6 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Header packets
 
-import types
 import binascii
 import struct
 import string

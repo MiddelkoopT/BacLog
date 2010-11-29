@@ -2,7 +2,6 @@
 
 import struct
 import string
-import binascii
 import types
 import inspect
 
@@ -13,7 +12,7 @@ class Tagged:
     def __init__(self,*args,**kwargs):
         '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
         #print "Tagged> %s " % self.__class__, args, kwargs
-        self._value=None  ## Current "Value"
+        self._value=None    ## Current "Value"
 
         ## Little messy but makes objects behave nicely.
         self._tag=kwargs.get('tag',None)     ## Current tag.
@@ -70,7 +69,7 @@ class Tagged:
 
     def _decode(self,data):
         '''Default fixed formatting found in self._format'''
-        num,cls,length=self._decodeTag()
+        num,cls,length=self._decodeTag() #@UnusedVariable
         self._value,=struct.unpack(self._format,data._get(length))
         print "Tagged.decode>", self.__class__, self._value
 
@@ -88,7 +87,7 @@ class Unsigned(Tagged):
     _size=8
     def _decode(self, data):
         '''Variable length decoding of Unsigned'''
-        num,cls,length=self._decodeTag()
+        num,cls,length=self._decodeTag() #@UnusedVariable
         assert length<=self._size ## Max sized unsigned
         value=0
         while length:
@@ -125,6 +124,7 @@ class Boolean(Tagged):
     _format='B'
 
 class Enumerated(Unsigned):
+    _display=None
     def _init(self,value):
         print "Enumerated>", self.__class__, value, self._enumeration, self._enumeration[value]
         if type(value) in types.StringTypes:
@@ -136,13 +136,13 @@ class Enumerated(Unsigned):
         
 class Bitstring(Tagged):
     def _decode(self,data):
-        num,cls,length=self._decodeTag()
+        num,cls,length=self._decodeTag() #@UnusedVariable
         assert length!=(3+1) # unsupported unpack
         self._unused,self._value=struct.unpack(['!BB','!BH'][length-2],data._get(length))
 
 class ObjectIdentifier(Tagged):
     def _decode(self,data):
-        num,cls,length=self._decodeTag()
+        num,cls,length=self._decodeTag() #@UnusedVariable
         assert length==4
         object,=struct.unpack('!L',data._get(length))
         self.objectType=int((object&0xFFC00000)>>22)
@@ -182,7 +182,7 @@ class Application(Tagged):
         opentag=self._openTag()
         
         tag=self._getTag(data)
-        num,cls,lvt=self._decodeTag(tag)
+        num,cls,lvt=self._decodeTag(tag) #@UnusedVariable
         DataClass = self._application[num]
         element=DataClass(data=data,tag=tag)
         self._value=element._value
@@ -196,7 +196,7 @@ class Sequence(Tagged):
         opentag=self._openTag()
         print "Sequence.decode> ############", opentag
         while self._closeTag(data,opentag):
-            num,cls,lvt=self._decodeTag()
+            num,cls,lvt=self._decodeTag() #@UnusedVariable
             name, DataClass = self._sequence[num]
             element=DataClass(data=data,tag=self._getTag())
             setattr(self,name,element._value)
@@ -226,7 +226,7 @@ class SequenceOf(Tagged):
         self._value=[self._sequenceof()]
         last=-1
         while self._closeTag(data,opentag):
-            num,cls,lvt=self._decodeTag()
+            num,cls,lvt=self._decodeTag() #@UnusedVariable
             if num<=last: ## wrapped [strictly ordered tags]
                 self._value.append(self._sequenceof())
             last=num

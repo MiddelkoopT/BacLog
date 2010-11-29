@@ -1,11 +1,11 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
-from tagged import *
+import tagged
+from tagged import Enumerated, Sequence, SequenceOf, Application, Unsigned32, Unsigned, Boolean, ObjectIdentifier, PropertyArrayIndex
 
 ## PhaseII Enumerations
 
 class PropertyIdentifier(Enumerated):
-    ## TODO: Remove/Merge BACnetPropertyIdentifier
     _enumeration={
                   'presentValue':85,
                   'objectList':76,
@@ -82,9 +82,9 @@ class SubscribeCOV(ServiceRequest):
                ]
 
 ## Create generated classes/dictionaries
-ConfirmedServiceChoice=buildServiceChoice(ServiceRequest,vars()) 
-ConfirmedServiceResponseChoice=buildServiceChoice(ComplexACK,vars()) 
-UnconfirmedServiceChoice=buildServiceChoice(UnconfirmedServiceRequest,vars()) 
+ConfirmedServiceChoice=tagged.buildServiceChoice(ServiceRequest,vars()) 
+ConfirmedServiceResponseChoice=tagged.buildServiceChoice(ComplexACK,vars()) 
+UnconfirmedServiceChoice=tagged.buildServiceChoice(UnconfirmedServiceRequest,vars()) 
 
 ## Generate derived attributes.
-buildDisplay(vars())
+tagged.buildDisplay(vars())

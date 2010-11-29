@@ -12,7 +12,6 @@ import console as database
 
 import packet
 import bacnet
-import tagged
 
 #### Main Class
 
