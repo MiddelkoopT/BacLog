@@ -15,14 +15,15 @@ class Database:
     def getDevices(self):
         devices=string.split(self.config.get(self.database,'devices'),',')
         database=[]
-        for address in devices:
-            database.append((address,self.port))
+        for device in devices:
+            address,instance=device.split(';')
+            database.append(((address,self.port),int(instance)))
         #print "console.Database.getDevices>", database 
         return database
     
     def getObjects(self,address):
         objects=[]
         for o in string.split(self.config.get(address[0],'objects'),','):
-            t,i=string.split(o,':')
+            t,i=o.split(':')
             objects.append((t,int(i)))
         return objects

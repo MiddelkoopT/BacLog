@@ -34,6 +34,8 @@ class BacLog:
         ## Communication queues/expect
         self.send=[] # request queue
         self.wait=0  # wait for n packets
+        
+        self.invoke=0  # simple incrementing counter
 
         ## Bind
         self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -47,39 +49,39 @@ class BacLog:
         exit()
 
     def run(self):
-        print "BacLog.run>"
-
         ## Read from database
         devices=self.db.getDevices();
-        target=devices[0]
-        objects=self.db.getObjects(target)
-        object=objects[0]
-        print "BacLog.run>", target, objects
+        print "BacLog.run>", devices
         
-        ## Setup test packet for first object
-        readproperty=bacnet.ReadProperty()
-        readproperty.object=bacnet.ObjectIdentifier(*object)
-        readproperty.property=bacnet.PropertyIdentifier('presentValue')
-        request=packet.ConfirmedRequest(readproperty)
+        ## Test packet generation
+        request=bacnet.ReadProperty('binary-output',20,'presentValue')
+        self.addWork(request, devices[0][0])
 
-        self.work[request.pid]=(request,target)
-        self.send.append((request,target))
-        
         ## subscribe to COV for 2 min.
         subscribe=bacnet.SubscribeCOV()
-        subscribe.pid=258
-        subscribe.object=bacnet.ObjectIdentifier(*object)
+        subscribe.pid=1
+        subscribe.object=bacnet.ObjectIdentifier('binary-output',20)
         subscribe.confirmed=False
         subscribe.lifetime=120
-        request=packet.ConfirmedRequest(subscribe)
-
-        self.work[request.pid]=(request,target)
-        self.send.append((request,target))
+        self.addWork(subscribe, devices[0][0])
         
+        #for target,instance in devices:
+        #    readproperty=bacnet.ReadProperty('device',instance,'objectList')
+        #    self.addWork(readproperty,target)
+
         self.process()
         for request,response,target in self.done:
-            print "BacLog.run>", response.value
+            print "BacLog.run>", response, response.value
         self.shutdown()
+
+        ## Depreciated
+        
+        
+    def addWork(self,request,target):
+        self.invoke+=1
+        self.work[self.invoke]=(request,target)
+        self.send.append((request,target,self.invoke))
+        return self.invoke
 
     def process(self):
         ## Loop
@@ -93,9 +95,12 @@ class BacLog:
             print sr,sw,se
             ## Send
             if sw and self.send:
-                (request,destination)=self.send.pop()
-                print "BacLog.process> send:", destination, request.pid, request
-                s.sendto(request._encode(),destination)
+                (request,destination,invoke)=self.send.pop()
+                p=packet.PDU[request._pdutype]()
+                p.invoke=invoke
+                p.servicechoice=request._servicechoice
+                print "BacLog.process> send:", destination, invoke, p._display(request)
+                s.sendto(p._encode(request),destination)
             ## Recv
             if sr:
                 (recv,source)=s.recvfrom(1500)
@@ -105,9 +110,7 @@ class BacLog:
                 ## Process PDU
                 if(p.pdutype==0x3): ## ComplexACK
                     p=packet.ComplexACK(data=recv) # Parse PDU
-                    print "BacLog.process>", p.servicechoice 
                     response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
-                    print "DEBUG:",response.value
                 elif p.pdutype==0x2: ## SimpleACK
                     p=packet.SimpleACK(data=recv)
                     response=bacnet.Boolean(True)
@@ -115,12 +118,11 @@ class BacLog:
                 elif p.pdutype==0x1: ## Unconfirmed Request
                     p=packet.UnconfirmedRequest(data=recv)
                     response=bacnet.UnconfirmedServiceChoice[p.servicechoice](data=p)
-                    print "DEBUG:",response.values.presentValue.value
                     p=None
-                if p and self.work.has_key(p.pid):
+                if p and self.work.has_key(p.invoke):
                     # remove from work queue and put on done
-                    request,target=self.work[p.pid]
-                    del self.work[p.pid]
+                    request,target=self.work[p.invoke]
+                    del self.work[p.invoke]
                     self.done.append((request,response,target))
                 else:
                     # not work so put on data queue

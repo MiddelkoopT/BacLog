@@ -126,13 +126,13 @@ class Boolean(Tagged):
 class Enumerated(Unsigned):
     _display=None
     def _init(self,value):
-        print "Enumerated>", self.__class__, value, self._enumeration, self._enumeration[value]
+        #print "Enumerated>", self.__class__, value, self._enumeration, self._enumeration[value]
         if type(value) in types.StringTypes:
             value=self._enumeration[value]
         self._value=value
         
     def __str__(self):
-        return "%s:%d" % (self._display[self._value],self._value)
+        return "%s(%d)" % (self._display[self._value],self._value)
         
 class Bitstring(Tagged):
     def _decode(self,data):
@@ -143,12 +143,13 @@ class Bitstring(Tagged):
 class ObjectIdentifier(Tagged):
     def _decode(self,data):
         num,cls,length=self._decodeTag() #@UnusedVariable
+        print self._decodeTag()
         assert length==4
         object,=struct.unpack('!L',data._get(length))
         self.objectType=int((object&0xFFC00000)>>22)
         self.instance=      (object&0x003FFFFF)
         self._value=(self.objectType,self.instance)
-        #print "ObjectIdentifier.decode> %08x" % object , self._value
+        print "ObjectIdentifier.decode> %08x" % object , self._value
         
     def _encode(self,tagnum=None):
         '''Encode as application (unsupported) unless tagnum given'''
@@ -167,20 +168,23 @@ class ObjectIdentifier(Tagged):
 
 class Application(Tagged):
     _application=[
-                  None,         # [A0] NULL
-                  None,         # [A1] Boolean
-                  Unsigned,     # [A2] Unsigned
-                  Integer,      # [A3] Integer
-                  None,         # [A4] Float
-                  None,         # [A5] Double
-                  None,         # [A6] Character
-                  None,         # [A7] Unicode
-                  Bitstring,    # [A8] Bitstring
-                  Enumerated,   # [A9] Enumerated
+                  None,             # [A0] NULL
+                  None,             # [A1] Boolean
+                  Unsigned,         # [A2] Unsigned
+                  Integer,          # [A3] Integer
+                  None,             # [A4] Float
+                  None,             # [A5] Double
+                  None,             # [A6] Character
+                  None,             # [A7] Unicode
+                  Bitstring,        # [A8] Bitstring
+                  Enumerated,       # [A9] Enumerated
+                  None,             # [A10] Date
+                  None,             # [A11] Time
+                  ObjectIdentifier,  # [A12] ObjectIdentifier
                   ]
+    
     def _decode(self,data):
         opentag=self._openTag()
-        
         tag=self._getTag(data)
         num,cls,lvt=self._decodeTag(tag) #@UnusedVariable
         DataClass = self._application[num]
@@ -194,14 +198,14 @@ class Application(Tagged):
 class Sequence(Tagged):
     def _decode(self,data):
         opentag=self._openTag()
-        print "Sequence.decode> ############", opentag
+        #print "Sequence.decode> ############", opentag
         while self._closeTag(data,opentag):
             num,cls,lvt=self._decodeTag() #@UnusedVariable
             name, DataClass = self._sequence[num]
             element=DataClass(data=data,tag=self._getTag())
             setattr(self,name,element._value)
-            print "Sequence.decode>", name, element._value
-        print "Sequence.decode> -----------", opentag
+            #print "Sequence.decode>", name, element._value
+        #print "Sequence.decode> -----------", opentag
         self._value=self
         
     def _encode(self):
@@ -209,12 +213,21 @@ class Sequence(Tagged):
         for tagnum,(name,cls) in enumerate(self._sequence):
             element=getattr(self,name,None)
             if element==None: continue 
-            print "Sequence.encode>", tagnum, name, cls, element
+            #print "Sequence.encode>", tagnum, name, cls, element
             if isinstance(element, Tagged):
                 encoded.append(element._encode(tagnum))
             else: ## Allow implicet conversion
                 encoded.append(cls(element)._encode(tagnum))
         return string.join(encoded,'')
+    
+    def __str__(self):
+        output=["{%s; " % self.__class__]
+        for tagnum,(name,cls) in enumerate(self._sequence):
+            element=getattr(self,name,None)
+            if element==None: continue 
+            output.append("%s[%d]:%s, " % (name,tagnum,element))
+        output.append("}")
+        return string.join(output,'')  
 
 class SequenceOf(Tagged):
     def _decode(self,data):
@@ -247,10 +260,6 @@ class SequenceOf(Tagged):
             assert display not in dir(self) 
             setattr(self,display,item)
         self._value=self
-
-## Misc data types
-class PropertyArrayIndex:
-    pass
 
 ## Helper functions
 

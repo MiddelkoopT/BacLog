@@ -1,7 +1,8 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
 import tagged
-from tagged import Enumerated, Sequence, SequenceOf, Application, Unsigned32, Unsigned, Boolean, ObjectIdentifier, PropertyArrayIndex
+
+from tagged import Enumerated, Sequence, SequenceOf, Application, Unsigned32, Unsigned, Boolean, ObjectIdentifier
 
 ## PhaseII Enumerations
 
@@ -36,8 +37,18 @@ class SequenceOfPropertyValue(SequenceOf):
 
 ## PhaseII PDU packets
 
+class ConfirmedServiceRequest(Sequence):
+    _pdutype=0x0 # ConfirmedRequest
+
 class UnconfirmedServiceRequest(Sequence):
-    pass
+    _pdutype=0x1 # UnconfirmedRequest
+
+#   _pdutype=0x2 # SimpleACK
+
+class ConfirmedServiceACK(Sequence):
+    _pdutype=0x3 # ComplexACK
+
+## Services
 
 class UnconfirmedCOVNotification(UnconfirmedServiceRequest):
     _servicechoice=2 # unconfirmedCOVNotification
@@ -48,31 +59,30 @@ class UnconfirmedCOVNotification(UnconfirmedServiceRequest):
                ('time',Unsigned),                       # [3] timeRemaining
                ('values',SequenceOfPropertyValue),      # [4] listOfValues
                ]
-    
-class ServiceRequest(Sequence):
-    pass
 
-class ComplexACK(Sequence):
-    pass
-
-class ReadProperty(ServiceRequest):
+class ReadProperty(ConfirmedServiceRequest):
     _servicechoice=12 # readProperty
     _sequence=[
-               ('object',ObjectIdentifier),     # [0] 
-               ('property',PropertyIdentifier), # [1] 
-               ('index',PropertyArrayIndex),    # [2] OPTIONAL
+               ('object',ObjectIdentifier),     # [0] objectIdentifier
+               ('property',PropertyIdentifier), # [1] propertyIdentifier
+               ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
                ]
+    def _init(self,objectType=None,objectInstance=None,property=None):
+        '''ReadProperty convience constructor'''
+        if objectType!=None and objectInstance!=None and property!=None:
+            self.object=ObjectIdentifier(objectType,objectInstance)
+            self.property=PropertyIdentifier(property)
 
-class ReadPropertyResponse(ComplexACK):
+class ReadPropertyResponse(ConfirmedServiceACK):
     _servicechoice=12 # readProperty
     _sequence=[
-               ('object',ObjectIdentifier),     # [0]
-               ('property',PropertyIdentifier), # [1] 
-               ('index',PropertyArrayIndex),    # [2] OPTIONAL
-               ('value',Application)            # [3]
+               ('object',ObjectIdentifier),     # [0] objectIdentifer
+               ('property',PropertyIdentifier), # [1] propertyIdentifier
+               ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
+               ('value',Application)            # [3] propertyValue
                ]
 
-class SubscribeCOV(ServiceRequest):
+class SubscribeCOV(ConfirmedServiceRequest):
     _servicechoice=5 # subscribeCOV
     _sequence=[
                ('pid',Unsigned32),              # [0] subscriberProcessIdentifier
@@ -82,8 +92,8 @@ class SubscribeCOV(ServiceRequest):
                ]
 
 ## Create generated classes/dictionaries
-ConfirmedServiceChoice=tagged.buildServiceChoice(ServiceRequest,vars()) 
-ConfirmedServiceResponseChoice=tagged.buildServiceChoice(ComplexACK,vars()) 
+ConfirmedServiceChoice=tagged.buildServiceChoice(ConfirmedServiceRequest,vars()) 
+ConfirmedServiceResponseChoice=tagged.buildServiceChoice(ConfirmedServiceACK,vars()) 
 UnconfirmedServiceChoice=tagged.buildServiceChoice(UnconfirmedServiceRequest,vars()) 
 
 ## Generate derived attributes.
