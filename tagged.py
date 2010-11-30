@@ -79,6 +79,8 @@ class Tagged:
         length=data.size-1
         return data.pack(self._setTag(tagnum,1,length),self._value)
 
+    def __repr__(self):
+        return "<%d>" % self._value
 
 ## Basic Types        
 
@@ -122,6 +124,8 @@ class Integer(Tagged):
 
 class Boolean(Tagged):
     _format='B'
+    def __repr__(self):
+        return ['<False>','<True>'][self._value]
 
 class Enumerated(Unsigned):
     _display=None
@@ -204,14 +208,17 @@ class Property(Tagged):
     _propertymap=None ## delayed initialization
     _type=Application
     def _init(self,object,property):
-        print "Property.init>", object, property
+        #print "Property.init>", object, property
         _type=self._propertymap.get(property._value,None) or self._propertymap.get((property,object.objectType),None)
         if _type!=None: ## If none found use default
             self._type=_type
-        print "Property.init>", self._type
+        #print "Property.init>", self._type
         
     def _decode(self,data):
         self._value=self._type(data=data,tag=self._tag)
+        
+    def __repr__(self):
+        return str(self._value)
 
 ## Composite types
 
@@ -276,13 +283,25 @@ class SequenceOf(Tagged):
         ## Magic to make sequenceof to use _sequencekey for attiributes
         if self._sequencekey==None:
             return
+        self._index=[]
         for item in self._value:
             name,cls = self._sequenceof._sequence[self._sequencekey]
             index=getattr(item,name,cls)._value
             display=cls._display[index]
-            assert display not in dir(self) 
+            assert display not in dir(self) ## detect duplicate index values. 
             setattr(self,display,item)
-        self._value=self
+        #self._value=self
+
+    def __str__(self):
+        output=['<<']
+        for item in self._value:
+            for tagnum,(name,cls) in enumerate(self._sequenceof._sequence):
+                element=getattr(item,name,None)
+                if element==None: continue 
+                output.append("%s[%d]:%s, " % (name,tagnum,element))
+            output.append('| ')
+        output.append('>>')
+        return string.join(output,'')  
 
 class Array(Tagged):
     _type=None

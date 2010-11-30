@@ -9,7 +9,17 @@ import console as database
 
 import bacnet
 import scheduler
-from scheduler import Message, Task
+import message
+
+from scheduler import Task
+from message import Message
+
+class Test(Task):
+    def run(self):
+        ## Test packet generation (scheduler conversion)
+        request=bacnet.ReadProperty('binary-output',20,'presentValue')
+        response=yield Message(('192.168.83.100',47808),request)
+        print "Test>", response
 
 class FindObjects(Task):
     def __init__(self,devices):
@@ -17,23 +27,24 @@ class FindObjects(Task):
         self.devices=devices
         
     def run(self):
-        ## Test packet generation (scheduler conversion)
-        request=bacnet.ReadProperty('binary-output',20,'presentValue')
-        response=yield Message(self.devices[0][0],request)
-        print "FindObjects>", response
-        return
-
-        ## subscribe to COV for 2 min.
-        subscribe=bacnet.SubscribeCOV()
-        subscribe.pid=1
-        subscribe.object=bacnet.ObjectIdentifier('binary-output',20)
-        subscribe.confirmed=False
-        subscribe.lifetime=120
-        self.addWork(subscribe, self.devices[0][0])
         
         for target,instance in self.devices:
             readproperty=bacnet.ReadProperty('device',instance,'objectList')
-            self.addWork(readproperty,target)
+            properties=yield Message(target,readproperty)
+            print "*FindObjects>", properties
+
+        ## subscribe to COV for 2 min.
+        subscribe=bacnet.SubscribeCOV()
+        subscribe.pid=self.tid
+        subscribe.object=bacnet.ObjectIdentifier('binary-output',20)
+        subscribe.confirmed=False
+        subscribe.lifetime=120
+        ack=yield Message(self.devices[0][0], subscribe)
+        print "*FindObjects>", ack
+        
+        notification=yield None
+        print "*FindObjects>", notification
+
 
 #### Main Class
 
@@ -48,7 +59,7 @@ class BacLog:
         
         ## I/O scheduler and drivers
         self.scheduler=scheduler.Scheduler()
-        self.scheduler.addHandler(scheduler.MessageHandler(bind,port))        
+        self.scheduler.addHandler(message.MessageHandler(bind,port))        
         self.db=database.Database()
         
     def shutdown(self):
@@ -61,9 +72,12 @@ class BacLog:
         ## Read list of devices from database
         devices=self.db.getDevices();
         print "BacLog.run>", devices
-
-        self.scheduler.add(FindObjects(devices))
-        self.scheduler.run()
+        
+        scheduler=self.scheduler
+        
+        scheduler.add(Test())
+        scheduler.add(FindObjects(devices))
+        scheduler.run()
         self.shutdown()
 
 if __name__=='__main__':

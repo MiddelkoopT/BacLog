@@ -3,11 +3,6 @@
 ## Main I/O and Task scheduler
 
 import select
-import socket
-import binascii
-
-import packet
-import bacnet
 
 class Task:
     tid=0
@@ -21,76 +16,9 @@ class Work:
         self.tid=tid
         self.request=request
         self.response=None
-
-class Message:
-    _handler=None
-    def __init__(self,remote,message=None,wait=True):
-        self.remote=remote
-        self.message=message
-        self.wait=wait
-
-    def __str__(self):
-        return "[[%s:%s]]" % (self.remote,self.message)
-
-
-class MessageHandler:
-    def __init__(self, address, port):
-        print "MessageHandler>", address, port
-        self.send=[]
-        self.recv=[]
-        self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-        self.socket.bind((address,port))
-        self.socket.setblocking(0)
-        Message._handler=self
-        
-    def put(self,work):
-        invoke=work.tid
-        request=work.request.message
-        remote=work.request.remote
-
-        p=packet.PDU[request._pdutype]()
-        p.invoke=invoke
-        p.servicechoice=request._servicechoice
-        print "MessageHandler.put>", remote, invoke, p._display(request)
-        self.send.append((remote,p._encode(request)))
-        
-    def write(self):
-        remote,data=self.send.pop(0)
-        sent=self.socket.sendto(data, remote)
-        assert sent==len(data) ## Send entire packet.
-        print "MessageHandler.write>", remote
-        
-    def read(self):
-        (recv,remote)=self.socket.recvfrom(1500)
-        self.recv.append((recv,remote))
-        print "MessageHandler.read>", remote
-        
-    def get(self):
-        recv,remote=self.recv.pop(0)
-        ## Process BVLC/NPDU and start of APDU
-        p=packet.Packet(data=recv)
-        print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
-        ## Process PDU
-        if(p.pdutype==0x3): ## ComplexACK
-            p=packet.ComplexACK(data=recv) # Parse PDU
-            response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
-        elif p.pdutype==0x2: ## SimpleACK
-            p=packet.SimpleACK(data=recv)
-            response=bacnet.Boolean(True)
-            response.value=response._value
-        elif p.pdutype==0x1: ## Unconfirmed Request
-            p=packet.UnconfirmedRequest(data=recv)
-            service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)
-            response=service and service(data=p)
-        
-        if not response:
-            return False ## discarded data.
-        work=Work(p.invoke)
-        work.response=Message(remote,response)
-        return work
     
-    def shutdown(self):
-        self.socket.close()
+    def __str__(self):
+        return "work:%d" % self.tid
 
 class Scheduler:
     def __init__(self):
@@ -118,7 +46,7 @@ class Scheduler:
             if self.done: 
                 block=0
             while True:
-                print "Scheduler.run> select"
+                print "Scheduler.run> select",block
                 r,w,x=[],[],[]
                 for h in self.handler:
                     r.append(h.socket)
@@ -132,18 +60,18 @@ class Scheduler:
                     print "Scheduler.run> empty"
                     break
 
-                block=0 ## Data exists
+                block=0 ## Data exists do not block
 
                 ## Send
                 for s in sw:
-                    print "Scheduler.run> write"
+                    #print "Scheduler.run> write"
                     handler=self.socket[s]
                     handler.write()
     
                 ## Recv
                 for s in sr:
                     print "Scheduler.run> read"
-                    handler=self.socket[s]
+                    #handler=self.socket[s]
                     handler.read()
             
             ## Pair responses
@@ -160,8 +88,9 @@ class Scheduler:
                     task=self.task[work.tid]
                     print "Scheduler.run> done", work.tid, work.response
                     send=task.send(work.response) ## Main coroutine entry point
-                    print "Scheduler.run> work", send
-                    send._handler.put(Work(work.tid,send))
+                    if send:
+                        print "Scheduler.run> work", send
+                        send._handler.put(Work(work.tid,send))
                 except StopIteration:
                     print "Scheduler.run> %d exited" % work.tid
                     del self.task[work.tid]
@@ -171,5 +100,6 @@ class Scheduler:
         assert not self.work and not self.done
         
     def shutdown(self):
-        Message._handler.shutdown()
+        for h in self.handler:
+            h.shutdown()
 
