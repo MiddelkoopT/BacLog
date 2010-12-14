@@ -32,9 +32,9 @@ CREATE TABLE Points (
 -- BACnet points at the time of use.
 DROP TABLE IF EXISTS Objects;
 CREATE TABLE Objects (
-	object SERIAL, -- object ID; object definition (temporal)
-	device integer, -- device ID; device definition (temporal)
-	point integer, -- point ID; physical point definition
+	object SERIAL, -- object ID - object definition (temporal)
+	device integer, -- device ID - device definition (temporal)
+	point integer, -- point ID - physical point definition
 	instance integer, -- object instance
 	type integer, -- BACnet ObjectType
 	first timestamp, -- first time seen, valid until last
