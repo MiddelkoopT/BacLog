@@ -7,6 +7,8 @@ import inspect
 
 import bacnet
 
+SEP=''
+
 ## PhaseII Data types
 class Tagged:
     _value=None
@@ -252,13 +254,13 @@ class Sequence(Tagged):
         return string.join(encoded,'')
     
     def __str__(self):
-        output=["{%s; " % self.__class__]
+        output=["{%s;" % self.__class__]
         for tagnum,(name,cls) in enumerate(self._sequence):
             element=getattr(self,name,None)
             if element==None: continue 
-            output.append("%s[%d]:%s, " % (name,tagnum,element))
+            output.append(" %s[%d]:%s," % (name,tagnum,element))
         output.append("}")
-        return string.join(output,'')  
+        return string.join(output,SEP)  
 
 class SequenceOf(Tagged):
     _sequenceof=None
@@ -293,14 +295,15 @@ class SequenceOf(Tagged):
         #self._value=self
 
     def __str__(self):
-        output=['<<']
+        output=["<<"]
+        output.append(SEP)
         for item in self._value:
             for tagnum,(name,cls) in enumerate(self._sequenceof._sequence):
                 element=getattr(item,name,None)
                 if element==None: continue 
-                output.append("%s[%d]:%s, " % (name,tagnum,element))
-            output.append('| ')
-        output.append('>>')
+                output.append(" %s[%d]:%s," % (name,tagnum,element))
+            output.append(SEP)
+        output.append(" >>")
         return string.join(output,'')  
 
 class Array(Tagged):
@@ -317,7 +320,11 @@ class Array(Tagged):
         #print "Array.decode> -----------", opentag
 
     def __str__(self):
-        return str(self._value)
+        output=["["]
+        for v in self._value:
+            output.append(" %s," % v)
+        output[-1]="]"
+        return string.join(output,SEP)
 
 ## Helper functions
 

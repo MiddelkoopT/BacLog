@@ -8,6 +8,9 @@ import packet
 import bacnet
 import scheduler
 
+debug=False
+trace=False
+
 class Message:
     _handler=None
     def __init__(self,remote,message=None,wait=True):
@@ -20,7 +23,7 @@ class Message:
 
 class MessageHandler:
     def __init__(self, address, port):
-        print "MessageHandler>", address, port
+        if debug: print "MessageHandler>", address, port
         self.send=[]
         self.recv=[]
         self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -36,25 +39,25 @@ class MessageHandler:
         p=packet.PDU[request._pdutype]()
         p.invoke=invoke
         p.servicechoice=request._servicechoice
-        print "MessageHandler.put>", remote, invoke, p._display(request)
+        if debug: print "MessageHandler.put>", remote, invoke, p._display(request)
         self.send.append((remote,p._encode(request)))
         
     def write(self):
         remote,data=self.send.pop(0)
         sent=self.socket.sendto(data, remote)
         assert sent==len(data) ## Send entire packet.
-        print "MessageHandler.write>", remote
+        if trace: print "MessageHandler.write>", remote
         
     def read(self):
         (recv,remote)=self.socket.recvfrom(1500)
         self.recv.append((recv,remote))
-        print "MessageHandler.read>", remote
+        if trace: print "MessageHandler.read>", remote
         
     def get(self):
         recv,remote=self.recv.pop(0)
         ## Process BVLC/NPDU and start of APDU
         p=packet.Packet(data=recv)
-        print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
+        if debug: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
         ## Process PDU
         if(p.pdutype==0x3): ## ComplexACK
             p=packet.ComplexACK(data=recv) # Parse PDU
@@ -68,7 +71,6 @@ class MessageHandler:
             p=packet.UnconfirmedRequest(data=recv)
             service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)
             response=service and service(data=p)
-            print response
             tid=response.pid._value
 
         assert response ## Discarded data        
@@ -81,4 +83,3 @@ class MessageHandler:
     
     def shutdown(self):
         self.socket.close()
-

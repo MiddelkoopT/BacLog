@@ -4,6 +4,9 @@
 
 import select
 
+debug=False
+trace=False
+
 class Task:
     tid=0
     def __init__(self):
@@ -22,7 +25,7 @@ class Work:
 
 class Scheduler:
     def __init__(self):
-        print "Scheduler>"
+        if debug: print "Scheduler>"
         self.task={}
         self.work=[]
         self.done=[]
@@ -40,13 +43,13 @@ class Scheduler:
         self.done.append(Work(task.tid)) ## Prime
         
     def run(self):
-        print "Scheduler.run> start"
+        if debug: print "Scheduler.run> start"
         while self.task:
             block=5 ## start off with blocking.
             if self.done: 
                 block=0
             while True:
-                print "Scheduler.run> select",block
+                if debug: print "Scheduler.run> select",block
                 r,w,x=[],[],[]
                 for h in self.handler:
                     r.append(h.socket)
@@ -57,21 +60,21 @@ class Scheduler:
 
                 ## Nothing to do.
                 if (not sr) and (not sw) and (not sx):
-                    print "Scheduler.run> empty"
+                    if debug: print "Scheduler.run> empty"
                     break
 
                 block=0 ## Data exists do not block
 
                 ## Send
                 for s in sw:
-                    #print "Scheduler.run> write"
+                    if trace: print "Scheduler.run> write"
                     handler=self.socket[s]
                     handler.write()
     
                 ## Recv
                 for s in sr:
-                    print "Scheduler.run> read"
-                    #handler=self.socket[s]
+                    if trace: print "Scheduler.run> read"
+                    handler=self.socket[s]
                     handler.read()
             
             ## Pair responses
@@ -79,20 +82,20 @@ class Scheduler:
                 while h.recv:
                     work=h.get()  ## Handlers do the paring.
                     self.done.append(work)
-                    print "Scheduler.run> pair", work
+                    if debug: print "Scheduler.run> pair", work
             
             ## Deliver responses to tasks and collect new messages.
             while self.done:
                 try:
                     work=self.done.pop(0)
                     task=self.task[work.tid]
-                    print "Scheduler.run> done", work.tid, work.response
+                    if debug: "Scheduler.run> done", work.tid, work.response
                     send=task.send(work.response) ## Main coroutine entry point
                     if send:
-                        print "Scheduler.run> work", send
+                        #print "Scheduler.run> work", send
                         send._handler.put(Work(work.tid,send))
                 except StopIteration:
-                    print "Scheduler.run> %d exited" % work.tid
+                    if debug: print "Scheduler.run> %d exited" % work.tid
                     del self.task[work.tid]
                     continue
 

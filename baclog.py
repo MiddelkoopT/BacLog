@@ -31,7 +31,7 @@ class FindObjects(Task):
         for target,instance in self.devices:
             readproperty=bacnet.ReadProperty('device',instance,'objectList')
             properties=yield Message(target,readproperty)
-            print "*FindObjects>", properties
+            print "FindObjects>", properties
 
         ## subscribe to COV for 2 min.
         subscribe=bacnet.SubscribeCOV()
@@ -40,10 +40,10 @@ class FindObjects(Task):
         subscribe.confirmed=False
         subscribe.lifetime=120
         ack=yield Message(self.devices[0][0], subscribe)
-        print "*FindObjects>", ack
+        print "FindObjects>", ack
         
         notification=yield None
-        print "*FindObjects>", notification
+        print "FindObjects>", notification
 
 
 #### Main Class
@@ -55,7 +55,7 @@ class BacLog:
         self.config.read(('baclog.ini','local.ini'))
         bind=self.config.get('Network','bind')
         port=self.config.getint('Network','port')
-        print "BacLog>"
+        #print "BacLog>"
         
         ## I/O scheduler and drivers
         self.scheduler=scheduler.Scheduler()
@@ -63,9 +63,7 @@ class BacLog:
         self.db=database.Database()
         
     def shutdown(self):
-        print "BacLog> shutdown"
         self.scheduler.shutdown()
-        print "BacLog> exit"
         exit()
 
     def run(self):
@@ -75,9 +73,10 @@ class BacLog:
         
         scheduler=self.scheduler
         
-        scheduler.add(Test())
+        #scheduler.add(Test())
         scheduler.add(FindObjects(devices))
         scheduler.run()
+
         self.shutdown()
 
 if __name__=='__main__':
