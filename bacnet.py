@@ -20,9 +20,9 @@ class PropertyIdentifier(Enumerated):
 
 class ObjectType(Enumerated):
     _enumeration={
-                  'analog-value':2,
-                  'binary-input':3,
-                  'binary-output':4,
+                  'analogValue':2,
+                  'binaryInput':3,
+                  'binaryOutput':4,
                   'device':8,
                   'file':10,
                   }
@@ -74,11 +74,13 @@ class ReadProperty(ConfirmedServiceRequest):
                ('property',PropertyIdentifier), # [1] propertyIdentifier
                ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
                ]
-    def _init(self,objectType=None,objectInstance=None,property=None):
+    def _init(self,property=None,object=None,objectInstance=None):
         '''ReadProperty convience constructor'''
-        if objectType!=None and objectInstance!=None and property!=None:
-            self.object=ObjectIdentifier(objectType,objectInstance)
+        if property!=None and object!=None:
             self.property=PropertyIdentifier(property)
+            if objectInstance!=None:
+                object=ObjectIdentifier(object,objectInstance)
+            self.object=object
 
 class ReadPropertyResponse(ConfirmedServiceACK):
     _servicechoice=12 # readProperty
@@ -113,3 +115,4 @@ UnconfirmedServiceChoice=tagged.buildServiceChoice(UnconfirmedServiceRequest,var
 ## Generate derived attributes.
 tagged.buildProperty(PropertyMap)
 tagged.buildDisplay(vars())
+tagged.buildEnumeration(vars())

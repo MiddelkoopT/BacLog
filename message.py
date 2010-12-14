@@ -35,7 +35,6 @@ class MessageHandler:
         invoke=work.tid
         request=work.request.message
         remote=work.request.remote
-
         p=packet.PDU[request._pdutype]()
         p.invoke=invoke
         p.servicechoice=request._servicechoice
@@ -59,6 +58,7 @@ class MessageHandler:
         p=packet.Packet(data=recv)
         if debug: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
         ## Process PDU
+        response=None
         if(p.pdutype==0x3): ## ComplexACK
             p=packet.ComplexACK(data=recv) # Parse PDU
             response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
@@ -70,12 +70,15 @@ class MessageHandler:
         elif p.pdutype==0x1: ## Unconfirmed Request
             p=packet.UnconfirmedRequest(data=recv)
             service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)
-            response=service and service(data=p)
-            tid=response.pid._value
+            if service:
+                response=service(data=p)
+                tid=response.pid._value
+        else:
+            assert False ## Unknown PDU
 
-        assert response ## Discarded data        
         if not response:
-            return False 
+            print "MessageHandler.get> Unknown packet", binascii.b2a_hex(recv)
+            return False        
 
         work=scheduler.Work(tid)
         work.response=Message(remote,response)

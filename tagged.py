@@ -7,7 +7,7 @@ import inspect
 
 import bacnet
 
-SEP=''
+SEP="\n"
 
 ## PhaseII Data types
 class Tagged:
@@ -83,6 +83,17 @@ class Tagged:
 
     def __repr__(self):
         return "<%d>" % self._value
+    
+    def __eq__(self,other):
+        if isinstance(other, Tagged):
+            return self._value==other._value
+        return False
+
+    def __ne__(self,other):
+        return not self==other
+    
+    def __hash__(self):
+        return self._value.__hash__()
 
 ## Basic Types        
 
@@ -120,9 +131,8 @@ class Unsigned(Tagged):
 class Unsigned32(Unsigned):
     _size=4
 
-    
-class Integer(Tagged):
-    pass
+class Float(Tagged):
+    _format='f'
 
 class Boolean(Tagged):
     _format='B'
@@ -130,15 +140,13 @@ class Boolean(Tagged):
         return ['<False>','<True>'][self._value]
 
 class Enumerated(Unsigned):
+    _enumeration=None
     _display=None
     def _init(self,value):
         #print "Enumerated>", self.__class__, value, self._enumeration, self._enumeration[value]
         if type(value) in types.StringTypes:
             value=self._enumeration[value]
         self._value=value
-
-    def __call__(self,key):
-        return self._enumerated[key]
 
     def __str__(self):
         return "%s(%d)" % (self._display[self._value],self._value)
@@ -177,8 +185,8 @@ class Application(Tagged):
                   None,             # [A0] NULL
                   None,             # [A1] Boolean
                   Unsigned,         # [A2] Unsigned
-                  Integer,          # [A3] Integer
-                  None,             # [A4] Float
+                  None,             # [A3] Integer
+                  Float,            # [A4] Float
                   None,             # [A5] Double
                   None,             # [A6] Character
                   None,             # [A7] Unicode
@@ -194,6 +202,7 @@ class Application(Tagged):
         tag=self._getTag(data)
         num,cls,lvt=self._decodeTag(tag) #@UnusedVariable
         DataClass = self._application[num]
+        #print "Application>", num, DataClass
         element=DataClass(data=data,tag=tag)
         self.value=element._value
         #print "Application.decode>", element._value
@@ -218,7 +227,7 @@ class Property(Tagged):
         
     def _decode(self,data):
         self._value=self._type(data=data,tag=self._tag)
-        
+                
     def __repr__(self):
         return str(self._value)
 
@@ -319,6 +328,9 @@ class Array(Tagged):
             #print "Array.decode>", item
         #print "Array.decode> -----------", opentag
 
+    def __iter__(self):
+        return self._value.__iter__()
+
     def __str__(self):
         output=["["]
         for v in self._value:
@@ -337,8 +349,14 @@ def buildServiceChoice(base,objects):
 
 def buildDisplay(objects):
     for cls in objects.itervalues():
-        if inspect.isclass(cls) and issubclass(cls, Enumerated) and hasattr(cls, '_enumeration'):
+        if inspect.isclass(cls) and issubclass(cls, Enumerated) and cls._enumeration:
             cls._display=dict((value, key) for key, value in cls._enumeration.iteritems())
+
+def buildEnumeration(objects):
+    for cls in objects.itervalues():
+        if inspect.isclass(cls) and issubclass(cls, Enumerated) and cls._enumeration:
+            for name,value in cls._enumeration.iteritems():
+                setattr(cls,name,value)
 
 def buildProperty(mapping):
     '''Replaces enumerated text values with enumeration values for Property type mapping'''

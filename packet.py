@@ -128,4 +128,3 @@ class ComplexACK(Packet):
 
 ## PDU classes indexed by type
 PDU=[ConfirmedRequest,UnconfirmedRequest,SimpleACK,ComplexACK]
-

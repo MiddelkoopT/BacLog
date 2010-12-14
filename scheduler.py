@@ -9,6 +9,7 @@ trace=False
 
 class Task:
     tid=0
+    scheduler=None
     def __init__(self):
         Task.tid+=1
         self.tid=Task.tid
@@ -41,6 +42,7 @@ class Scheduler:
         assert isinstance(task, Task)
         self.task[task.tid]=task
         self.done.append(Work(task.tid)) ## Prime
+        return task.tid
         
     def run(self):
         if debug: print "Scheduler.run> start"
@@ -81,7 +83,8 @@ class Scheduler:
             for h in self.handler:
                 while h.recv:
                     work=h.get()  ## Handlers do the paring.
-                    self.done.append(work)
+                    if work:
+                        self.done.append(work)
                     if debug: print "Scheduler.run> pair", work
             
             ## Deliver responses to tasks and collect new messages.
@@ -92,7 +95,7 @@ class Scheduler:
                     if debug: "Scheduler.run> done", work.tid, work.response
                     send=task.send(work.response) ## Main coroutine entry point
                     if send:
-                        #print "Scheduler.run> work", send
+                        if debug: print "Scheduler.run> work", send
                         send._handler.put(Work(work.tid,send))
                 except StopIteration:
                     if debug: print "Scheduler.run> %d exited" % work.tid
@@ -105,4 +108,3 @@ class Scheduler:
     def shutdown(self):
         for h in self.handler:
             h.shutdown()
-

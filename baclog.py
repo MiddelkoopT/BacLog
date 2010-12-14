@@ -14,10 +14,11 @@ import message
 from scheduler import Task
 from message import Message
 
+
 class Test(Task):
     def run(self):
         ## Test packet generation (scheduler conversion)
-        request=bacnet.ReadProperty('binary-output',20,'presentValue')
+        request=bacnet.ReadProperty('presentValue','binaryOutput',20,)
         response=yield Message(('192.168.83.100',47808),request)
         print "Test>", response
 
@@ -28,22 +29,41 @@ class FindObjects(Task):
         
     def run(self):
         
-        for target,instance in self.devices:
-            readproperty=bacnet.ReadProperty('device',instance,'objectList')
-            properties=yield Message(target,readproperty)
-            print "FindObjects>", properties
+        ## FIXME: Enumerations should be defined this way (convert to undersocre notation).
+        ioObjectTypes=[
+                       bacnet.ObjectType.binaryOutput, #@UndefinedVariable
+                       bacnet.ObjectType.binaryInput,  #@UndefinedVariable
+                       ]
 
-        ## subscribe to COV for 2 min.
-        subscribe=bacnet.SubscribeCOV()
-        subscribe.pid=self.tid
-        subscribe.object=bacnet.ObjectIdentifier('binary-output',20)
-        subscribe.confirmed=False
-        subscribe.lifetime=120
-        ack=yield Message(self.devices[0][0], subscribe)
-        print "FindObjects>", ack
+        ## Create new notification task.
+        pid=Task.scheduler.add(COVNotification())
         
-        notification=yield None
-        print "FindObjects>", notification
+        for target,instance in self.devices:
+            readproperty=bacnet.ReadProperty('objectList','device',instance)
+            properties=yield Message(target,readproperty)
+            #print "FindObjects>", properties
+            for o in properties.message.value:
+                #print "FindObjects>", o
+                if o.objectType not in ioObjectTypes:
+                    continue
+                request=bacnet.ReadProperty('presentValue',o)
+                response=yield Message(target,request)
+                print "FindObjects> value:", response
+            
+                ## subscribe to COV for 2 min.
+                subscribe=bacnet.SubscribeCOV()
+                subscribe.pid=pid
+                subscribe.object=bacnet.ObjectIdentifier('binaryOutput',20)
+                subscribe.confirmed=False
+                subscribe.lifetime=120
+                ack=yield Message(target, subscribe)
+                print "FindObjects>", ack
+
+class COVNotification(Task):
+    def run(self):
+        for i in range(1,10):    
+            notification=yield None
+            print "COVNotification>", i, notification
 
 
 #### Main Class
@@ -59,7 +79,8 @@ class BacLog:
         
         ## I/O scheduler and drivers
         self.scheduler=scheduler.Scheduler()
-        self.scheduler.addHandler(message.MessageHandler(bind,port))        
+        self.scheduler.addHandler(message.MessageHandler(bind,port))
+        scheduler.Task.scheduler=self.scheduler ## Single scheduler for now.        
         self.db=database.Database()
         
     def shutdown(self):
