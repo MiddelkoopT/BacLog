@@ -22,6 +22,7 @@ class Message:
         return "[[%s:%s]]" % (self.remote,self.message)
 
 class MessageHandler:
+    """IO handler for scheduler class"""
     def __init__(self, address, port):
         if debug: print "MessageHandler>", address, port
         self.send=[]
@@ -40,6 +41,12 @@ class MessageHandler:
         p.servicechoice=request._servicechoice
         if debug: print "MessageHandler.put>", remote, invoke, p._display(request)
         self.send.append((remote,p._encode(request)))
+        
+    def writing(self):
+        return len(self.send) > 0
+    
+    def reading(self):
+        return True
         
     def write(self):
         remote,data=self.send.pop(0)

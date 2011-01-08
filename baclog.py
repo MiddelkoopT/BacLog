@@ -4,8 +4,8 @@
 import ConfigParser as configparser
 
 ## Use which data store.  [Database.driver stores value; not implemented]
-#import postgres as database
-import console as database
+import postgres as database
+#import console as database
 
 import bacnet
 import scheduler
@@ -21,6 +21,20 @@ class Test(Task):
         request=bacnet.ReadProperty('presentValue','binaryOutput',20,)
         response=yield Message(('192.168.83.100',47808),request)
         print "Test>", response
+        
+class GetDevices(Task):
+    def __init__(self,dbh):
+        Task.__init__(self)
+        self.dbh=dbh
+        self.devices=[]
+
+    def run(self):
+        query=self.dbh.query("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
+        response=yield query
+        self.devices=[]
+        for IP,port,instance in response:
+            self.devices.append(((IP,port),instance))
+        print "GetDevices>", self.devices
 
 class FindObjects(Task):
     def __init__(self,devices):
@@ -28,7 +42,6 @@ class FindObjects(Task):
         self.devices=devices
         
     def run(self):
-        
         ## FIXME: Enumerations should be defined this way (convert to undersocre notation).
         ioObjectTypes=[
                        bacnet.ObjectType.binaryOutput, #@UndefinedVariable
@@ -78,10 +91,11 @@ class BacLog:
         #print "BacLog>"
         
         ## I/O scheduler and drivers
-        self.scheduler=scheduler.Scheduler()
-        self.scheduler.addHandler(message.MessageHandler(bind,port))
-        scheduler.Task.scheduler=self.scheduler ## Single scheduler for now.        
-        self.db=database.Database()
+        self.scheduler=scheduler.init()
+        mh=message.MessageHandler(bind,port)
+        self.scheduler.addHandler(mh)
+        self.dbh=database.DatabaseHandler()
+        self.scheduler.addHandler(self.dbh)
         
     def shutdown(self):
         self.scheduler.shutdown()
@@ -89,13 +103,18 @@ class BacLog:
 
     def run(self):
         ## Read list of devices from database
-        devices=self.db.getDevices();
-        print "BacLog.run>", devices
+#        db=database.Database()
+#        devices=db.getDevices();
+#        print "BacLog.run>", devices
         
         scheduler=self.scheduler
-        
         #scheduler.add(Test())
-        scheduler.add(FindObjects(devices))
+        
+        devices=GetDevices(self.dbh)
+        scheduler.add(devices)
+        scheduler.run()
+        objects=FindObjects(devices.devices)
+        scheduler.add(objects)
         scheduler.run()
 
         self.shutdown()
