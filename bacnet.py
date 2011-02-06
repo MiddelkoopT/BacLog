@@ -2,7 +2,7 @@
 
 import tagged
 
-from tagged import Unsigned32, Unsigned, Boolean, ObjectIdentifier, Property, Enumerated, Sequence, SequenceOf, Array, Tagged
+from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, ObjectIdentifier, Property, Enumerated, Sequence, SequenceOf, Array, Tagged
 
 ## Data types
 class ObjectIdentifierArray(Array):
@@ -25,6 +25,11 @@ class ObjectType(Enumerated):
                   'binaryOutput':4,
                   'device':8,
                   'file':10,
+                  }
+
+class Segmented(Enumerated): # BACnetSegmentation
+    _enumeration={
+                  'noSegmentation':3,
                   }
 
 ## PhaseII Data types
@@ -72,6 +77,16 @@ class WhoIs(UnconfirmedServiceRequest):
     _sequence=[
                ('low',Unsigned32),    # [0] deviceInstanceRangeLowLimit
                ('high',Unsigned32),   # [1] deviceInstanceRangeHighLimit
+               ]
+    
+class IAm(UnconfirmedServiceRequest):
+    _servicechoice=0 # i-Am
+    _context=False # context values not used.
+    _sequence=[
+               ('object',ObjectIdentifier), # iAmDeviceIdentifier
+               ('maxlength',Unsigned),      # maxADPULengthAccepted
+               ('segmentation',Segmented),  # segmentationSupported
+               ('vendor',Unsigned16),       # vendorID
                ]
 
 class ReadProperty(ConfirmedServiceRequest):

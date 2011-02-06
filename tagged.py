@@ -99,7 +99,8 @@ class Tagged:
 
 class Unsigned(Tagged):
     ## decode also used by Bitstring
-    _size=8
+    _size=8     # maximum size
+    _num=2      # application tag number
     def _decode(self, data):
         '''Variable length decoding of Unsigned'''
         num,cls,length=self._decodeTag() #@UnusedVariable
@@ -113,7 +114,7 @@ class Unsigned(Tagged):
         self._value=value         
         #print "Unsigned.decode> %d (%d)" % (self._size, self._value)
 
-    def _encode(self,tagnum):
+    def _encode(self,tagnum=None):
         '''Variable length encoding of Unsigned'''
         value=self._value
         length=0
@@ -126,10 +127,17 @@ class Unsigned(Tagged):
                 break
         #print length, bytes
         assert length<=self._size ## Max sized unsigned
-        return struct.pack('!B'+'B'*length,self._setTag(tagnum,1,length),*bytes)
+        if(tagnum==None):  ## encode as application tag
+            tag=self._setTag(self._num,0,length)
+        else:
+            tag=self._setTag(tagnum,1,length)
+        return struct.pack('!B'+'B'*length,tag,*bytes)
 
 class Unsigned32(Unsigned):
     _size=4
+
+class Unsigned16(Unsigned):
+    _size=2
 
 class Float(Tagged):
     _format='f'
@@ -142,6 +150,7 @@ class Boolean(Tagged):
 class Enumerated(Unsigned):
     _enumeration=None
     _display=None
+    _num=9  ## application tag number
     def _init(self,value):
         #print "Enumerated>", self.__class__, value, self._enumeration, self._enumeration[value]
         if type(value) in types.StringTypes:
@@ -158,6 +167,7 @@ class Bitstring(Tagged):
         self._unused,self._value=struct.unpack(['!BB','!BH'][length-2],data._get(length))
 
 class ObjectIdentifier(Tagged):
+    _num=12 ## application tag number
     def _decode(self,data):
         num,cls,length=self._decodeTag() #@UnusedVariable
         assert length==4
@@ -168,8 +178,11 @@ class ObjectIdentifier(Tagged):
         #print "ObjectIdentifier.decode> %08x" % object , self._value
         
     def _encode(self,tagnum=None):
-        '''Encode as application (unsupported) unless tagnum given'''
-        return struct.pack('!BI',self._setTag(tagnum,1,4),self.objectType << 22 | self.instance)
+        if(tagnum==None):
+            tag=self._setTag(self._num,0,4)
+        else:
+            tag=self._setTag(tagnum,1,4)
+        return struct.pack('!BI',tag,self.objectType << 22 | self.instance)
 
     def _init(self,objectType,instance):
         if type(objectType) in types.StringTypes:
@@ -235,6 +248,7 @@ class Property(Tagged):
 
 class Sequence(Tagged):
     _sequence=None
+    _context=True
     def _decode(self,data):
         opentag=self._openTag()
         #print "Sequence.decode> ############", opentag
@@ -253,6 +267,7 @@ class Sequence(Tagged):
     def _encode(self):
         encoded=[]
         for tagnum,(name,cls) in enumerate(self._sequence):
+            if not self._context: tagnum=None ## application tagging
             element=getattr(self,name,None)
             if element==None: continue 
             #print "Sequence.encode>", tagnum, name, cls, element

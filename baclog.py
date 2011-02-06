@@ -83,9 +83,16 @@ class COVNotification(Task):
 
 class WhoIs(Task):
     def run(self):
+        whois=yield None ## boot
         while True:
-            whois=yield None
             print "WhoIs>", whois
+            iam=bacnet.IAm()
+            iam.object=bacnet.ObjectIdentifier('device',self.device)
+            iam.maxlength=1024
+            iam.segmentation=bacnet.Segmented.noSegmentation #@UndefinedVariable
+            iam.vendor=65535
+            print "WhoIs>", iam
+            whois=yield Message(whois.remote,iam)
 
 #### Main Class
 
@@ -125,6 +132,7 @@ class BacLog:
 
         ## Services TODO: Add proper conditional so this can be moved to the top
         whois=WhoIs()
+        whois.device=self.config.getint('Network','device')
         scheduler.add(whois)
         self.mh.addService(whois,bacnet.WhoIs)
         
