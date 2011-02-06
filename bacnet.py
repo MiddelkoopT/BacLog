@@ -13,7 +13,7 @@ class ObjectIdentifierArray(Array):
 class PropertyIdentifier(Enumerated):
     _enumeration={
                   'presentValue':85,
-                  'objectIdentifer':75,
+                  'objectIdentifier':75,
                   'objectList':76,
                   'objectName':77,
                   'notificationClass':17,
@@ -32,8 +32,10 @@ class PropertyIdentifier(Enumerated):
 class ServicesSupported(Bitstring):
     _size=40
     _field={
+            'readProperty':12,
+            'readPropertyMultiple':14,
+            'unconfirmedCOVNotification':28,
             'whoIs':34,
-            'readPropertyMultiple':14
             }
 
 class ObjectType(Enumerated):
@@ -48,6 +50,11 @@ class ObjectType(Enumerated):
 class Segmented(Enumerated): # BACnetSegmentation
     _enumeration={
                   'noSegmentation':3,
+                  }
+
+class DeviceStatus(Enumerated): # BACnetDeviceStatus
+    _enumeration={
+                  'operational':0,
                   }
 
 ## PhaseII Data types
@@ -134,7 +141,7 @@ class SequenceOfPropertyReference(SequenceOf):
 class ReadAccessSpecification(Sequence):
     _sequence=[
                ('object',ObjectIdentifier),             # [0] objectIdentifier
-               ('property',SequenceOfPropertyReference) # [1] listOfProperties
+               ('list',SequenceOfPropertyReference)     # [1] listOfProperties
                ]
 
 class ReadAccessResult_Result(Sequence):
@@ -187,7 +194,16 @@ class SubscribeCOV(ConfirmedServiceRequest):
 PropertyMap={
              'objectList':ObjectIdentifierArray,
              'objectName':String,
+             'objectIdentifier':ObjectIdentifier,
              'protocolServicesSupported':ServicesSupported,
+             'systemStatus':DeviceStatus,
+             'vendorIdentifier':Unsigned16,
+             'maxAPDU':Unsigned,
+             'maxSegments':Unsigned,
+             'segmentation':Segmented,
+             'APDUSegmentationTimeout':Unsigned,
+             'APDUTimeout':Unsigned,
+             'APDURetries':Unsigned,
              }
 
 

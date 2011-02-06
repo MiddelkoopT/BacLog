@@ -177,7 +177,6 @@ class Boolean(Tagged):
 class String(Tagged):
     def _encode(self):
         length=len(self._value)
-        print "String.encode>", length
         data=struct.Struct("!BB%ds" % length)
         return data.pack(self._setTag(0x7,0,length+1),0x00,self._value) ## CharacterString(A7); Encode as UTF-8/ANSI X3.4; string
 
@@ -302,10 +301,10 @@ class Property(Tagged):
     _property=None
     _propertymap=None ## delayed initialization
     _type=Application ## default type
-    def _set(self,property,value=None):
+    def _set(self,property,*value):
         self._property=property
         self._type=self._propertymap.get(property._value,None)  or self._type
-        self._value=self._type(value)
+        self._value=self._type(*value)
         if debug: print "Property.init>", property, self._type
         
     def _decode(self,data):
@@ -423,6 +422,9 @@ class SequenceOf(Tagged):
         for element in self._value:
             encoded.append(element._encode())
         return string.join(encoded,'')
+
+    def __iter__(self):
+        return self._value.__iter__()
 
     def __str__(self):
         start=self._sequenceof._sequencestart
