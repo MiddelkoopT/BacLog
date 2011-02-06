@@ -134,6 +134,9 @@ ConfirmedServiceChoice=tagged.buildServiceChoice(ConfirmedServiceRequest,vars())
 ConfirmedServiceResponseChoice=tagged.buildServiceChoice(ConfirmedServiceACK,vars()) 
 UnconfirmedServiceChoice=tagged.buildServiceChoice(UnconfirmedServiceRequest,vars()) 
 
+## Idexed by PDU type
+ServiceChoice=[ConfirmedServiceChoice,UnconfirmedServiceChoice]
+
 ## Generate derived attributes.
 tagged.buildProperty(PropertyMap)
 tagged.buildDisplay(vars())

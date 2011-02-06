@@ -75,7 +75,7 @@ class Packet:
             if not name==None:
                 setattr(self, name, value)
             ## debug
-            if(expected!=None and value!=expected):
+            if(((not name) or (name and name[0]!='_')) and expected!=None and value!=expected):
                 print "Packet.decode> %s %02x %02x" %(name, value, expected)
                 assert False ## Should be no unexpected values.
 
@@ -97,11 +97,13 @@ class Packet:
 ## Basic PDU types
 
 class ConfirmedRequest(Packet):
-    def __init__(self):
+    def __init__(self,data=None):
         Packet.__init__(self,0x04,0x00)     # Expecting Reply ; Confirmed Request | Unsegmented
-        self._add('segment','B',0x04)       # Maximum APDU size 1024
+        self._add('_segment','B',0x04)      # Maximum APDU size 1024
         self._add('invoke','B',None)        # Request ID
         self._add('servicechoice','B',None) # serviceChoice/ACK
+        if(data):
+            self._decode(data)
 
 class UnconfirmedRequest(Packet):
     def __init__(self,data=None):

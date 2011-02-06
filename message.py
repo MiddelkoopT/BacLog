@@ -77,30 +77,25 @@ class MessageHandler:
         p=packet.Packet(data=recv)
         if trace: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
         ## Process PDU
+        p=packet.PDU[p.pdutype](data=recv)
         response=None
         if(p.pdutype==0x3): ## ComplexACK
-            p=packet.ComplexACK(data=recv) # Parse PDU
             response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
             tid=self.wait[p.invoke]
         elif p.pdutype==0x2: ## SimpleACK
-            p=packet.SimpleACK(data=recv)
             response=bacnet.Boolean(True)
             tid=self.wait[p.invoke]
-        elif p.pdutype==0x1: ## Unconfirmed Request
-            p=packet.UnconfirmedRequest(data=recv)
-            service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)
-            if service:
-                response=service(data=p)
-                task=self.service[p.pdutype][p.servicechoice]
-                if task:
-                    tid=task.tid
-                if hasattr(response,'pid'):
-                    tid=response.pid._value
-            else:
+        else: ## Unconfirmed and Confirmed Request
+            service=bacnet.ServiceChoice[p.pdutype].get(p.servicechoice,None)
+            if not service:
                 print "MessageHandler.get>", p.servicechoice, service
-
-        else:
-            assert False ## Unknown PDU
+                return False
+            response=service(data=p)
+            task=self.service[p.pdutype][p.servicechoice]
+            if task:
+                tid=task.tid
+            if hasattr(response,'pid'):
+                tid=response.pid._value
 
         if not response:
             print "MessageHandler.get> Unknown packet", binascii.b2a_hex(recv)
