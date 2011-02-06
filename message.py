@@ -84,6 +84,9 @@ class MessageHandler:
             if service:
                 response=service(data=p)
                 tid=response.pid._value
+            else:
+                print "MessageHandler.get>", p.servicechoice, service
+
         else:
             assert False ## Unknown PDU
 

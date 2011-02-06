@@ -67,6 +67,13 @@ class UnconfirmedCOVNotification(UnconfirmedServiceRequest):
                ('values',SequenceOfPropertyValue),      # [4] listOfValues
                ]
 
+class WhoIs(UnconfirmedServiceRequest):
+    _servicechoice=8 # who-Is
+    _sequence=[
+               ('low',Unsigned32),    # [0] deviceInstanceRangeLowLimit
+               ('high',Unsigned32),   # [1] deviceInstanceRangeHighLimit
+               ]
+
 class ReadProperty(ConfirmedServiceRequest):
     _servicechoice=12 # readProperty
     _sequence=[

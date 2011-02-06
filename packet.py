@@ -30,7 +30,7 @@ class Packet:
         self._update()
 
     def _update(self):        
-        '''Set computed fields. (pdutype, pduflags) '''
+        '''Set computed fields. (pdutype, pduflags)'''
         if(self._pdu!=None):
             self.pdutype=(self._pdu&0xF0) >> 4
             self.pduflags=(self._pdu&0x0F) 
@@ -89,7 +89,7 @@ class Packet:
         
     def _get(self,length=1):
         '''Return next slice of data'''
-        if self._position+length >= len(self._data):
+        if self._position+length > len(self._data):
             return None
         self._position+=length
         return self._data[self._position-length:self._position]
