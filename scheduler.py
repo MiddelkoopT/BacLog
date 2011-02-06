@@ -3,7 +3,7 @@
 
 import select
 
-debug=False
+debug=True
 trace=False
 
 class Scheduler:
@@ -38,7 +38,7 @@ class Scheduler:
                     h.reading() and r.append(h.socket)
                     h.writing() and w.append(h.socket)
                     x.append(h.socket)
-                if debug: print "Scheduler.run> select",r,w,x,block
+                if trace: print "Scheduler.run> select",r,w,x,block
                 (sr,sw,sx) = select.select(r,w,x,block)
                 assert not sx
                 if trace: print "Scheduler.run> select", sr,sw,sx

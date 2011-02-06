@@ -13,9 +13,20 @@ class ObjectIdentifierArray(Array):
 class PropertyIdentifier(Enumerated):
     _enumeration={
                   'presentValue':85,
+                  'objectIdentifer':75,
                   'objectList':76,
+                  'objectName':77,
                   'notificationClass':17,
                   'statusFlags':111,
+                  'protocolServicesSupported':97,
+                  'systemStatus':112,
+                  'vendorIdentifier':120,
+                  'maxAPDU':62,
+                  'maxSegments':167,
+                  'segmentation':107,
+                  'APDUSegmentationTimeout':10,
+                  'APDUTimeout':11,
+                  'APDURetries':73,
                   }
 
 class ObjectType(Enumerated):
@@ -103,6 +114,25 @@ class ReadProperty(ConfirmedServiceRequest):
             if objectInstance!=None:
                 object=ObjectIdentifier(object,objectInstance)
             self.object=object
+
+class PropertyReference(Sequence):
+    _sequence=[
+               ('property',PropertyIdentifier),     # [0] propertyIdentifier
+               ('index',Unsigned),                  # [1] propertyArrayIndex OPTIONAL
+               ]
+
+class SequenceOfPropertyReference(SequenceOf):
+    _sequenceof=PropertyReference
+
+class ReadAccessSpecification(Sequence):
+    _sequence=[
+               ('object',ObjectIdentifier),             # [0] objectIdentifier
+               ('property',SequenceOfPropertyReference) # [1] listOfProperties
+               ]
+    
+class ReadPropertyMultiple(SequenceOf,ConfirmedServiceRequest):
+    _servicechoice=14 # readPropertyMutiple
+    _sequenceof=ReadAccessSpecification # SequenceOf
 
 class ReadPropertyResponse(ConfirmedServiceACK):
     _servicechoice=12 # readProperty

@@ -94,6 +94,13 @@ class WhoIs(Task):
             print "WhoIs>", iam
             whois=yield Message(whois.remote,iam)
 
+class ReadPropertyMultiple(Task):
+    def run(self):
+        read=yield None ## boot
+        while True:
+            print "ReadPropertyMultiple>", read
+            read=yield None
+
 #### Main Class
 
 class BacLog:
@@ -125,17 +132,27 @@ class BacLog:
         scheduler=self.scheduler
         #scheduler.add(Test())
         
+        ## Runtime information
+        device=self.config.getint('Network','device')
         
+        ## Configure using schedulertask GetDevices
         devices=GetDevices(self.dbh)
         scheduler.add(devices)
         scheduler.run()
 
-        ## Services TODO: Add proper conditional so this can be moved to the top
+        ## Add services after information is known
         whois=WhoIs()
-        whois.device=self.config.getint('Network','device')
+        whois.device=device
         scheduler.add(whois)
         self.mh.addService(whois,bacnet.WhoIs)
         
+        properties=ReadPropertyMultiple()
+        properties.device=device
+        properties.name='BacLog'
+        scheduler.add(properties)
+        self.mh.addService(properties,bacnet.ReadPropertyMultiple)
+        
+        ## Find objects and register COV
         objects=FindObjects(devices.devices)
         scheduler.add(objects)
         scheduler.run()

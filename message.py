@@ -79,6 +79,7 @@ class MessageHandler:
         ## Process PDU
         p=packet.PDU[p.pdutype](data=recv)
         response=None
+        tid=None
         if(p.pdutype==0x3): ## ComplexACK
             response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
             tid=self.wait[p.invoke]
@@ -96,6 +97,7 @@ class MessageHandler:
                 tid=task.tid
             if hasattr(response,'pid'):
                 tid=response.pid._value
+            assert tid ## No target task
 
         if not response:
             print "MessageHandler.get> Unknown packet", binascii.b2a_hex(recv)

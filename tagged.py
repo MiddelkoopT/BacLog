@@ -7,6 +7,10 @@ import inspect
 
 import bacnet
 
+debug=False
+trace=False
+
+## Config
 SEP="\n"
 
 ## PhaseII Data types
@@ -251,7 +255,7 @@ class Sequence(Tagged):
     _context=True
     def _decode(self,data):
         opentag=self._openTag()
-        #print "Sequence.decode> ############", opentag
+        if debug: print "Sequence.decode> ############", opentag, self.__class__
         while self._closeTag(data,opentag):
             num,cls,lvt=self._decodeTag() #@UnusedVariable
             name, DataClass = self._sequence[num]
@@ -260,8 +264,8 @@ class Sequence(Tagged):
             else:
                 element=DataClass(data=data,tag=self._getTag())
             setattr(self,name,element)
-            #print "Sequence.decode>", name, element
-        #print "Sequence.decode> -----------", opentag
+            if debug: print "Sequence.decode>", name, element
+        if debug: print "Sequence.decode> -----------", opentag
         self._value=self
         
     def _encode(self):
@@ -270,7 +274,7 @@ class Sequence(Tagged):
             if not self._context: tagnum=None ## application tagging
             element=getattr(self,name,None)
             if element==None: continue 
-            #print "Sequence.encode>", tagnum, name, cls, element
+            if debug: print "Sequence.encode>", tagnum, name, cls, element
             if isinstance(element, Tagged):
                 encoded.append(element._encode(tagnum))
             else: ## Allow implicet conversion
@@ -290,8 +294,8 @@ class SequenceOf(Tagged):
     _sequenceof=None
     _sequencekey=None
     def _decode(self,data):
-        #print "SequenceOf.decode> ############", opentag
         opentag=self._openTag() 
+        if debug: print "SequenceOf.decode> ############", opentag, self.__class__
         assert issubclass(self._sequenceof, Sequence) ## Only decode sequence of sequence
         self._value=[self._sequenceof()]
         last=-1
@@ -303,8 +307,8 @@ class SequenceOf(Tagged):
             name, DataClass = self._sequenceof._sequence[num]
             element=DataClass(data=data,tag=self._getTag())
             setattr(self._value[-1],name,element)
-            #print "SequenceOf.decode>", len(self._value), name, element
-        #print "SequenceOf.decode> ------------", opentag
+            if debug: print "SequenceOf.decode>", len(self._value), name, element
+        if debug: print "SequenceOf.decode> ------------", opentag
 
         ## Magic to make sequenceof to use _sequencekey for attiributes
         if self._sequencekey==None:
@@ -317,6 +321,9 @@ class SequenceOf(Tagged):
             assert display not in dir(self) ## detect duplicate index values. 
             setattr(self,display,item)
         #self._value=self
+
+    def _encode(self):
+        assert False ## Unimplemented
 
     def __str__(self):
         output=["<<"]
