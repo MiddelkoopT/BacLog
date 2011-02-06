@@ -30,16 +30,20 @@ class MessageHandler:
         self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.socket.bind((address,port))
         self.socket.setblocking(0)
+        self.invoke=0
+        self.wait={}
         Message._handler=self
         
     def put(self,work):
-        invoke=work.tid
+        invoke=self.invoke+1
         request=work.request.message
         remote=work.request.remote
         p=packet.PDU[request._pdutype]()
         p.invoke=invoke
         p.servicechoice=request._servicechoice
         if debug: print "MessageHandler.put>", remote, invoke, p._display(request)
+        self.invoke=invoke
+        self.wait[invoke]=work.tid
         self.send.append((remote,p._encode(request)))
         
     def writing(self):
@@ -63,17 +67,17 @@ class MessageHandler:
         recv,remote=self.recv.pop(0)
         ## Process BVLC/NPDU and start of APDU
         p=packet.Packet(data=recv)
-        if debug: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
+        if trace: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
         ## Process PDU
         response=None
         if(p.pdutype==0x3): ## ComplexACK
             p=packet.ComplexACK(data=recv) # Parse PDU
             response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
-            tid=p.invoke
+            tid=self.wait[p.invoke]
         elif p.pdutype==0x2: ## SimpleACK
             p=packet.SimpleACK(data=recv)
             response=bacnet.Boolean(True)
-            tid=p.invoke
+            tid=self.wait[p.invoke]
         elif p.pdutype==0x1: ## Unconfirmed Request
             p=packet.UnconfirmedRequest(data=recv)
             service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)

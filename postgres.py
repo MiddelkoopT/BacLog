@@ -3,7 +3,7 @@
 
 import psycopg2.extras
 
-debug=True
+debug=False
 trace=False
 
 class Database:
@@ -50,7 +50,7 @@ class DatabaseHandler:
     POLL_ERROR=psycopg2.extensions.POLL_ERROR   # 3
     
     def __init__(self,database='baclog'):
-        if debug: print "DatabaseHandler>", database
+        if trace: print "DatabaseHandler>", database
         self.conn=psycopg2.connect(database=database,async=1)
         psycopg2.extras.wait_select(self.conn) ## Block; connections are expensive anyways.
         self.socket=self.conn.fileno()
@@ -65,7 +65,7 @@ class DatabaseHandler:
     ## Handler API
         
     def put(self,work):
-        if debug: print "DatabaseHandler.put>", work.tid, work.request
+        if debug: print "DatabaseHandler.put>", work.tid, work.request.query
         assert not self.send ## Database can only handle one simultaneous query.
         self.send=work
 
@@ -89,11 +89,12 @@ class DatabaseHandler:
         self.wait=None
         
     def get(self):
-        if debug: print "DatabaseHandler.get>", self.recv.tid
+        if trace: print "DatabaseHandler.get>", self.recv.tid
         work=self.recv
         work.response=work.request.fetch()
         work.request=None
         self.recv=None
+        if debug: print "DatabaseHandler.get>", work.tid, work.response
         return work
     
     def shutdown(self):

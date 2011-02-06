@@ -14,6 +14,9 @@ import message
 from scheduler import Task
 from message import Message
 
+debug=True
+trace=False
+
 
 class Test(Task):
     def run(self):
@@ -54,11 +57,10 @@ class FindObjects(Task):
         for target,instance in self.devices:
             readproperty=bacnet.ReadProperty('objectList','device',instance)
             properties=yield Message(target,readproperty)
-            #print "FindObjects>", properties
             for o in properties.message.value:
-                #print "FindObjects>", o
                 if o.objectType not in ioObjectTypes:
                     continue
+                if debug: print "FindObjects>", o
                 request=bacnet.ReadProperty('presentValue',o)
                 response=yield Message(target,request)
                 print "FindObjects> value:", response
@@ -66,7 +68,7 @@ class FindObjects(Task):
                 ## subscribe to COV for 2 min.
                 subscribe=bacnet.SubscribeCOV()
                 subscribe.pid=pid
-                subscribe.object=bacnet.ObjectIdentifier('binaryOutput',20)
+                subscribe.object=o
                 subscribe.confirmed=False
                 subscribe.lifetime=120
                 ack=yield Message(target, subscribe)
@@ -92,8 +94,8 @@ class BacLog:
         
         ## I/O scheduler and drivers
         self.scheduler=scheduler.init()
-        mh=message.MessageHandler(bind,port)
-        self.scheduler.addHandler(mh)
+        self.mh=message.MessageHandler(bind,port)
+        self.scheduler.addHandler(self.mh)
         self.dbh=database.DatabaseHandler()
         self.scheduler.addHandler(self.dbh)
         
