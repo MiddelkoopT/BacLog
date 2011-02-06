@@ -2,7 +2,7 @@
 
 import tagged
 
-from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, String, ObjectIdentifier, Property, Enumerated, Sequence, SequenceOf, Array, Tagged
+from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, String, ObjectIdentifier, Property, Enumerated, Bitstring, Sequence, SequenceOf, Array, Tagged
 
 ## Data types
 class ObjectIdentifierArray(Array):
@@ -28,6 +28,13 @@ class PropertyIdentifier(Enumerated):
                   'APDUTimeout':11,
                   'APDURetries':73,
                   }
+    
+class ServicesSupported(Bitstring):
+    _size=40
+    _field={
+            'whoIs':34,
+            'readPropertyMultiple':14
+            }
 
 class ObjectType(Enumerated):
     _enumeration={
@@ -180,6 +187,7 @@ class SubscribeCOV(ConfirmedServiceRequest):
 PropertyMap={
              'objectList':ObjectIdentifierArray,
              'objectName':String,
+             'protocolServicesSupported':ServicesSupported,
              }
 
 

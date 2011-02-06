@@ -13,10 +13,10 @@ trace=False
 
 class Message:
     _handler=None
-    def __init__(self,remote,message=None,wait=True):
+    def __init__(self,remote,message=None,invoke=None):
         self.remote=remote
         self.message=message
-        self.wait=wait
+        self.invoke=invoke
 
     def __str__(self):
         return "[[%s:%s]]" % (self.remote,self.message)
@@ -43,15 +43,21 @@ class MessageHandler:
     ## Handler API
         
     def put(self,work):
-        invoke=self.invoke+1
         request=work.request.message
         remote=work.request.remote
+
         p=packet.PDU[request._pdutype]()
-        p.invoke=invoke
         p.servicechoice=request._servicechoice
-        if debug: print "MessageHandler.put>", remote, invoke, p._display(request)
-        self.invoke=invoke
-        self.wait[invoke]=work.tid
+
+        if work.request.invoke!=None:
+            p.invoke=work.request.invoke
+        else:
+            self.invoke+=1 ## Increment counter
+            assert self.invoke<255 ## FIXME: handle wrap/outstanding on self.wait array.
+            p.invoke=self.invoke
+            self.wait[p.invoke]=work.tid
+
+        if debug: print "MessageHandler.put>", remote, p.invoke, p._display(request)
         self.send.append((remote,p._encode(request)))
         
     def writing(self):
@@ -95,6 +101,7 @@ class MessageHandler:
             task=self.service[p.pdutype][p.servicechoice]
             if task:
                 tid=task.tid
+                
             if hasattr(message,'pid'):
                 tid=message.pid._value
                 
@@ -107,7 +114,7 @@ class MessageHandler:
             return False        
 
         work=scheduler.Work(tid)
-        work.response=Message(remote,message)
+        work.response=Message(remote,message,getattr(p,'invoke',None))
         return work
     
     def shutdown(self):

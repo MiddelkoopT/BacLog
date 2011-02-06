@@ -11,8 +11,8 @@ class Packet:
     def __init__(self,control=None,pdu=None,data=None):
         self._field=[]      # (name,value) of variable (None for constant/default)
         self._format=[]     # format of the field
-        self._data=None     # unparced data.
-        self._position=0    # beginning of unparced data.
+        self._data=None     # unparsed data.
+        self._position=0    # beginning of unparsed data.
         self._pdu=None      # payload
         
         ## BVLC

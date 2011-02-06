@@ -72,7 +72,7 @@ class FindObjects(Task):
                 subscribe.pid=pid
                 subscribe.object=o
                 subscribe.confirmed=False
-                subscribe.lifetime=120
+                subscribe.lifetime=12
                 ack=yield Message(target, subscribe)
                 print "FindObjects>", ack
 
@@ -105,17 +105,17 @@ class ReadPropertyMultiple(Task):
             result=response.Add()
             result.object=bacnet.ObjectIdentifier('device',self.device)
             item=result.list.Add()
-            item.property=bacnet.PropertyIdentifier('objectName')
-            item.index=None ## Optional
-            item.value=bacnet.Property(item.property,"BL")
+            item.property=bacnet.PropertyIdentifier('protocolServicesSupported')
+            item.index=None
+            properties=['whoIs','readPropertyMultiple']
+            item.value=bacnet.Property(item.property,properties)
             
-            print "###", response
-            print "###", binascii.b2a_hex(response._encode()[7:-1])
+            print "###", request.invoke, response
 
             if not request:
                 request=yield True
             else:
-                request=yield Message(request.remote,response)
+                request=yield Message(request.remote,response,request.invoke)
 
 #### Main Class
 
@@ -150,11 +150,11 @@ class BacLog:
 #        print "BacLog.run>", devices
 
         ## Test
-        test=ReadPropertyMultiple()
-        test.device=device
-        test.send(None)
-        test.send(None)
-        #return
+#        test=ReadPropertyMultiple()
+#        test.device=device
+#        test.send(None)
+#        test.send(None)
+#        return
         
         ## Configure using schedulertask GetDevices
         devices=GetDevices(self.dbh)

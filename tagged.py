@@ -7,7 +7,7 @@ import inspect
 
 import bacnet
 
-debug=True
+debug=False
 trace=False
 
 ## Config
@@ -194,15 +194,46 @@ class Enumerated(Unsigned):
             value=self._enumeration[value]
         self._value=value
 
-    def __str__(self):
+    def __repr__(self):
         return "%s(%d)" % (self._display[self._value],self._value)
 
 class Bitstring(Tagged):
+    _field=None
+    _size=None
+    _display=None
+    _num=8 ## application tag number
+
     def _decode(self,data):
         num,cls,length=self._decodeTag() #@UnusedVariable
         assert length!=(3+1) # unsupported unpack
         self._unused,self._value=struct.unpack(['!BB','!BH'][length-2],data._get(length))
-
+        
+    def _encode(self,tagnum=None):
+        assert tagnum==None and self._size==40  ## FIXME: Hand packed for size=40 and application
+        tag=(self._num<<4) | (0x0 | 0x05) ## Tag 8, application(0), 5=Extended length
+        length=(self._size+7)>>3
+        bytes=[0]*length
+        for field,value in enumerate(self._value):
+            if value:
+                bytes[field>>3]|= 0x80>>(field&0x07)
+        return struct.pack('!BBB'+'B'*length,tag,length+1,self._size&0x07,*bytes) ## tag; extended tag length ; unencoded bits; bits
+    
+    def _set(self,fields):
+        for f in fields:
+            self._value[self._field[f]]=1
+        
+    def _init(self):
+        if self._size: ## FIXME: this should be removed, all bit strings should have a defined size
+            self._value=[0]*self._size
+        
+    def __str__(self):
+        output=['<<']
+        for f,v in enumerate(self._value):
+            if v:
+                output.append("%s(%d);"% (self._display[f],f))
+        output.append('>>')
+        return string.join(output,'')
+        
 class ObjectIdentifier(Tagged):
     _num=12 ## application tag number
     def _decode(self,data):
@@ -215,7 +246,7 @@ class ObjectIdentifier(Tagged):
         #print "ObjectIdentifier.decode> %08x" % object , self._value
         
     def _encode(self,tagnum=None):
-        if(tagnum==None):
+        if tagnum==None:
             tag=self._setTag(self._num,0,4)
         else:
             tag=self._setTag(tagnum,1,4)
@@ -440,8 +471,12 @@ def buildServiceChoice(base,objects):
 
 def buildDisplay(objects):
     for cls in objects.itervalues():
-        if inspect.isclass(cls) and issubclass(cls, Enumerated) and cls._enumeration:
+        if not inspect.isclass(cls):
+            continue
+        if issubclass(cls, Enumerated) and cls._enumeration:
             cls._display=dict((value, key) for key, value in cls._enumeration.iteritems())
+        if issubclass(cls, Bitstring) and cls._field:
+            cls._display=dict((value, key) for key, value in cls._field.iteritems())
 
 def buildEnumeration(objects):
     for cls in objects.itervalues():
