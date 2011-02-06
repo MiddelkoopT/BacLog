@@ -81,6 +81,12 @@ class COVNotification(Task):
             print "COVNotification>", i, notification
 
 
+class WhoIs(Task):
+    def run(self):
+        while True:
+            whois=yield None
+            print "WhoIs>", whois
+
 #### Main Class
 
 class BacLog:
@@ -112,9 +118,16 @@ class BacLog:
         scheduler=self.scheduler
         #scheduler.add(Test())
         
+        
         devices=GetDevices(self.dbh)
         scheduler.add(devices)
         scheduler.run()
+
+        ## Services TODO: Add proper conditional so this can be moved to the top
+        whois=WhoIs()
+        scheduler.add(whois)
+        self.mh.addService(whois,bacnet.WhoIs)
+        
         objects=FindObjects(devices.devices)
         scheduler.add(objects)
         scheduler.run()

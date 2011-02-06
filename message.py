@@ -32,7 +32,15 @@ class MessageHandler:
         self.socket.setblocking(0)
         self.invoke=0
         self.wait={}
+        self.service=[[None]*16]*8  ## Service Table
         Message._handler=self
+        
+        
+    def addService(self,task,service):
+        print "MessageHandler.addService>", service._servicechoice, service
+        self.service[service._pdutype][service._servicechoice]=task
+        
+    ## Handler API
         
     def put(self,work):
         invoke=self.invoke+1
@@ -83,7 +91,11 @@ class MessageHandler:
             service=bacnet.UnconfirmedServiceChoice.get(p.servicechoice,None)
             if service:
                 response=service(data=p)
-                tid=response.pid._value
+                task=self.service[p.pdutype][p.servicechoice]
+                if task:
+                    tid=task.tid
+                if hasattr(response,'pid'):
+                    tid=response.pid._value
             else:
                 print "MessageHandler.get>", p.servicechoice, service
 

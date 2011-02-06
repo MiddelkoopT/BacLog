@@ -3,7 +3,7 @@
 
 import select
 
-debug=False
+debug=True
 trace=False
 
 class Scheduler:
