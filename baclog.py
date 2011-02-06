@@ -1,6 +1,7 @@
 #!/usr/bin/python
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
+import binascii
 import ConfigParser as configparser
 
 ## Use which data store.  [Database.driver stores value; not implemented]
@@ -13,6 +14,7 @@ import message
 
 from scheduler import Task
 from message import Message
+from binhex import hexbin
 
 debug=True
 trace=False
@@ -96,10 +98,24 @@ class WhoIs(Task):
 
 class ReadPropertyMultiple(Task):
     def run(self):
-        read=yield None ## boot
+        request=yield None ## boot
         while True:
-            print "ReadPropertyMultiple>", read
-            read=yield None
+            print "ReadPropertyMultiple>", request
+            response=bacnet.ReadPropertyMultipleResponse()
+            result=response.Add()
+            result.object=bacnet.ObjectIdentifier('device',self.device)
+            item=result.list.Add()
+            item.property=bacnet.PropertyIdentifier('objectName')
+            item.index=None ## Optional
+            item.value=bacnet.Property(item.property,"BL")
+            
+            print "###", response
+            print "###", binascii.b2a_hex(response._encode()[7:-1])
+
+            if not request:
+                request=yield True
+            else:
+                request=yield Message(request.remote,response)
 
 #### Main Class
 
@@ -124,16 +140,21 @@ class BacLog:
         exit()
 
     def run(self):
+        ## Runtime information
+        scheduler=self.scheduler
+        device=self.config.getint('Network','device')
+
         ## Read list of devices from database
 #        db=database.Database()
 #        devices=db.getDevices();
 #        print "BacLog.run>", devices
-        
-        scheduler=self.scheduler
-        #scheduler.add(Test())
-        
-        ## Runtime information
-        device=self.config.getint('Network','device')
+
+        ## Test
+        test=ReadPropertyMultiple()
+        test.device=device
+        test.send(None)
+        test.send(None)
+        #return
         
         ## Configure using schedulertask GetDevices
         devices=GetDevices(self.dbh)

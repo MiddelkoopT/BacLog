@@ -78,33 +78,36 @@ class MessageHandler:
         if trace: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
         ## Process PDU
         p=packet.PDU[p.pdutype](data=recv)
-        response=None
+        message=None
         tid=None
         if(p.pdutype==0x3): ## ComplexACK
-            response=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
+            message=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
             tid=self.wait[p.invoke]
         elif p.pdutype==0x2: ## SimpleACK
-            response=bacnet.Boolean(True)
+            message=bacnet.Boolean(True)
             tid=self.wait[p.invoke]
         else: ## Unconfirmed and Confirmed Request
             service=bacnet.ServiceChoice[p.pdutype].get(p.servicechoice,None)
             if not service:
                 print "MessageHandler.get>", p.servicechoice, service
                 return False
-            response=service(data=p)
+            message=service(data=p)
             task=self.service[p.pdutype][p.servicechoice]
             if task:
                 tid=task.tid
-            if hasattr(response,'pid'):
-                tid=response.pid._value
-            assert tid ## No target task
+            if hasattr(message,'pid'):
+                tid=message.pid._value
+                
+            if tid==None:
+                print "MessageHandler.get> Unknown handler", message
+                return False
 
-        if not response:
+        if not message:
             print "MessageHandler.get> Unknown packet", binascii.b2a_hex(recv)
             return False        
 
         work=scheduler.Work(tid)
-        work.response=Message(remote,response)
+        work.response=Message(remote,message)
         return work
     
     def shutdown(self):

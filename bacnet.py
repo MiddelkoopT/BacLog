@@ -2,7 +2,7 @@
 
 import tagged
 
-from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, ObjectIdentifier, Property, Enumerated, Sequence, SequenceOf, Array, Tagged
+from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, String, ObjectIdentifier, Property, Enumerated, Sequence, SequenceOf, Array, Tagged
 
 ## Data types
 class ObjectIdentifierArray(Array):
@@ -107,7 +107,7 @@ class ReadProperty(ConfirmedServiceRequest):
                ('property',PropertyIdentifier), # [1] propertyIdentifier
                ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
                ]
-    def _init(self,property=None,object=None,objectInstance=None):
+    def _set(self,property=None,object=None,objectInstance=None):
         '''ReadProperty convience constructor'''
         if property!=None and object!=None:
             self.property=PropertyIdentifier(property)
@@ -129,6 +129,26 @@ class ReadAccessSpecification(Sequence):
                ('object',ObjectIdentifier),             # [0] objectIdentifier
                ('property',SequenceOfPropertyReference) # [1] listOfProperties
                ]
+
+class ReadAccessResult_Result(Sequence):
+    _sequencestart=2
+    _sequence=[
+               ('property',PropertyIdentifier),         # [2] propertyIdentifier
+               ('index',Unsigned),                      # [3] propertyArrayIndex OPTIONAL
+               ('value',Property),                      # [4] CHOICE: propertyValue ANS.1 
+#               ('error',Error),                        # [5]         propertyError
+               ]
+
+class SequenceOfReadAccessResult_Result(SequenceOf):
+    _sequenceof=ReadAccessResult_Result
+    _sequencekey=2
+
+class ReadAccessResult(Sequence):
+    _sequence=[
+               ('object',ObjectIdentifier),                     # [0] objectIdentifier
+               ('list',SequenceOfReadAccessResult_Result),      # [1] listOfResults ANONYMOUS SEQUENCE OF SEQUENCE
+                                                                # [2-5] ReadAccessResult_Result
+               ]
     
 class ReadPropertyMultiple(SequenceOf,ConfirmedServiceRequest):
     _servicechoice=14 # readPropertyMutiple
@@ -142,7 +162,10 @@ class ReadPropertyResponse(ConfirmedServiceACK):
                ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
                ('value',Property),              # [3] propertyValue ASN.1
                ]
-    #_context={'value':('property','object')} # Hard coded in Sequence.
+
+class ReadPropertyMultipleResponse(SequenceOf,ConfirmedServiceACK):
+    _servicechoice=14 # readPropertyMultiple
+    _sequenceof=ReadAccessResult # SequenceOf
 
 class SubscribeCOV(ConfirmedServiceRequest):
     _servicechoice=5 # subscribeCOV
@@ -156,6 +179,7 @@ class SubscribeCOV(ConfirmedServiceRequest):
 ## (property, objectType=None) : DataClass mapping
 PropertyMap={
              'objectList':ObjectIdentifierArray,
+             'objectName':String,
              }
 
 
