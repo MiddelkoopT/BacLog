@@ -19,6 +19,14 @@ from message import Message
 debug=True
 trace=False
 
+LIFETIME=300
+
+class Ping(Task):
+    def run(self):
+        for i in range(1,10):
+            ping=yield scheduler.Wait(2)
+            print "Ping>",i,ping
+
 class FindObjects(Task):
     def __init__(self,devices):
         Task.__init__(self)
@@ -32,26 +40,27 @@ class FindObjects(Task):
 
         ## Create new notification task.
         pid=Task.scheduler.add(COVNotification())
-        
-        for target,instance in self.devices:
-            readproperty=bacnet.ReadProperty('objectList','device',instance)
-            properties=yield Message(target,readproperty)
-            for o in properties.message.value:
-                if o.objectType not in ioObjectTypes:
-                    continue
-                if debug: print "FindObjects>", o
-                request=bacnet.ReadProperty('presentValue',o)
-                response=yield Message(target,request)
-                print "FindObjects> value:", response
-            
-                ## SubscribeCOV
-                subscribe=bacnet.SubscribeCOV()
-                subscribe.pid=pid
-                subscribe.object=o
-                subscribe.confirmed=False
-                subscribe.lifetime=300
-                ack=yield Message(target, subscribe)
-                if trace: print "FindObjects> Subscribe ACK", ack
+        while True:
+            for target,instance in self.devices:
+                readproperty=bacnet.ReadProperty('objectList','device',instance)
+                properties=yield Message(target,readproperty)
+                for o in properties.message.value:
+                    if o.objectType not in ioObjectTypes:
+                        continue
+                    if debug: print "FindObjects>", o
+                    request=bacnet.ReadProperty('presentValue',o)
+                    response=yield Message(target,request)
+                    if trace: print "FindObjects> value:", response
+                
+                    ## SubscribeCOV
+                    subscribe=bacnet.SubscribeCOV()
+                    subscribe.pid=pid
+                    subscribe.object=o
+                    subscribe.confirmed=False
+                    subscribe.lifetime=LIFETIME
+                    ack=yield Message(target, subscribe)
+                    if debug: print "FindObjects> Subscribe ACK", ack
+            yield scheduler.Wait(LIFETIME-60)
 
 class COVNotification(Task):
     def run(self):
@@ -99,7 +108,7 @@ class BacLog:
 
         ## Setup scheduler
         scheduler=self.scheduler
-
+        
         ## Add services after information is known
         whois=service.WhoIs()
         whois.device=device

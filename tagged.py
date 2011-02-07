@@ -303,29 +303,26 @@ class Property(Tagged):
     Property -- ugly containment (external context required)!
       properties contain meta-information (property) and a value
     '''
-    _property=None
+    _identifier=None
     _propertymap=None ## delayed initialization
     _type=Application ## default type
     def _set(self,property,*value):
-        self._property=property
+        self._identifier=property
         self._type=self._propertymap.get(property._value,None)  or self._type
         self._value=self._type(*value)
         if debug: print "Property.init>", property, self._type
         
     def _decode(self,data):
         self._value=self._type(data=data,tag=self._tag)
-#        ## TODO: Fix Application to use object for presentValue enumerations
-#        if self._type==Application:        
-#            self._value=self._value._value ## drop application container
         
     def _encode(self,tagnum=None):
-        if debug: print "Property.encode>", tagnum, self._property, self._type
+        if debug: print "Property.encode>", tagnum, self._identifier, self._type
         return self._openTag(tagnum)+self._value._encode()+self._closeTag()
                 
     def __repr__(self):
-        if self._property==None:
+        if self._identifier==None:
             return str(self._value)
-        return "%s=%s" % (self._property, self._value)
+        return "%s=%s" % (self._identifier, self._value)
 
 ## Composite types
 

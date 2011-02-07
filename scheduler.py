@@ -2,6 +2,7 @@
 ## Main I/O and Task scheduler
 
 import select
+import time
 
 debug=False
 trace=False
@@ -13,6 +14,7 @@ class Scheduler:
         self.work=[]
         self.done=[]
         
+        self.cmd=[]
         self.handler=[]
         self.socket={}
     
@@ -25,7 +27,11 @@ class Scheduler:
         self.task[task.tid]=task
         self.done.append(Work(task.tid)) ## Prime
         return task.tid
-        
+    
+    def put(self,cmd):
+        assert isinstance(cmd, Work)
+        self.cmd.append(cmd)
+    
     def run(self):
         if debug: print "Scheduler.run> start"
         while self.task:
@@ -42,6 +48,17 @@ class Scheduler:
                 (sr,sw,sx) = select.select(r,w,x,block)
                 assert not sx
                 if trace: print "Scheduler.run> select", sr,sw,sx
+                
+                ## Command queue
+                cmd=[]
+                for w in self.cmd:
+                    if w.request.done():
+                        if debug: print "Sheduler.run> cmd", w
+                        w.response=w.request.get()
+                        self.done.append(w)
+                        continue
+                    cmd.append(w)
+                self.cmd=cmd
 
                 ## Nothing to do.
                 if (not sr) and (not sw) and (not sx):
@@ -61,6 +78,9 @@ class Scheduler:
                     if trace: print "Scheduler.run> read"
                     handler=self.socket[s]
                     handler.read()
+
+                if self.done: ## command processing.
+                    break
             
             ## Pair responses
             for h in self.handler:
@@ -118,6 +138,28 @@ class Work:
     
     def __repr__(self):
         return "work:%d" % self.tid
+
+## Internal scheduler commands.
+
+class Wait:
+    '''
+    Wait(sleep time) command
+    '''
+    _handler=Task.scheduler
+    def __init__(self,sleep):
+        self.sleep=sleep
+        self.start=time.time()
+        
+    def done(self):
+        if time.time() > self.start+self.sleep:
+            if debug: print "Wait.done>", self.start
+            return True
+        return False
+    
+    def get(self):
+        return True
+
+## Initialize scheduler.
 
 def init():
     return Task.scheduler
