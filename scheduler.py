@@ -116,7 +116,7 @@ class Work:
         self.request=request
         self.response=None
     
-    def __str__(self):
+    def __repr__(self):
         return "work:%d" % self.tid
 
 def init():

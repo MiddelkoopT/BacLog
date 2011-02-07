@@ -1,6 +1,7 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Database Driver
 
+import time
 import psycopg2.extras
 from scheduler import Task
 
@@ -8,42 +9,29 @@ from scheduler import Task
 debug=False
 trace=False
 
-## Synchronous Interface
-
-class Database:
-    def __init__(self,database='baclog'):
-        self.conn=psycopg2.connect(database=database)
-        self.database=database
-
-    def getDevices(self):
-        cur=self.conn.cursor()
-        cur.execute("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
-        devices=[]
-        for IP,port,instance in cur.fetchall():
-            devices.append(((IP,port),instance))
-        cur.close()
-        return devices
-    
 ## Asynchronous interface
     
 class Query:
+    _handler=None
     cursor=None
-    def __init__(self,dbh,query,*args):
-        if trace: print "Query>",dbh,query,args
-        self._handler=dbh
+    def __init__(self,query,*args):
         self.cursor=None
         self.query=query
         self.param=args
+        if debug: print "Query>",query,args #,self._handler
         
     def execute(self):
         conn=self._handler.conn
         if trace: print "Query.execute>", conn.poll()
         self.cursor=conn.cursor()
-        self.cursor.execute(self.query,*self.param)
+        self.cursor.execute(self.query,self.param)
         if trace: print "Query.execute>"
         
     def fetch(self):
-        response=self.cursor.fetchall()
+        if self.cursor.description==None:
+            response=self.cursor.rowcount ## Not a query 
+        else:
+            response=self.cursor.fetchall()
         self.cursor.close()
         return response
         
@@ -64,6 +52,7 @@ class DatabaseHandler:
         self.send=None
         self.recv=None
         self.wait=None
+        Query._handler=Query._handler or self ## default handler
         
     def query(self,query,*args):
         return Query(self,query,*args)
@@ -109,15 +98,37 @@ class DatabaseHandler:
 ## Database Tasks
 
 class GetDevices(Task):
-    def __init__(self,dbh):
-        Task.__init__(self)
-        self.dbh=dbh
-        self.devices=[]
-
+    devices=None
     def run(self):
-        query=self.dbh.query("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
+        query=Query("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
         response=yield query
         self.devices=[]
         for IP,port,instance in response:
             self.devices.append(((IP,port),instance))
         print "GetDevices>", self.devices
+
+class Log(Query):
+    '''
+    Build Log Query
+    '''
+    def __init__(self,IP,port,instance,value,status=None,objectID=None):
+        query="INSERT INTO Log (time,IP,port,instance,value,status,objectID) VALUES (%s,%s,%s,%s,%s,%s,%s);"
+        now=psycopg2.TimestampFromTicks(time.time())
+        Query.__init__(self,query, now,IP,port,instance,value,status,objectID)
+
+## Synchronous Interface
+
+class Database:
+    def __init__(self,database='baclog'):
+        self.conn=psycopg2.connect(database=database)
+        self.database=database
+
+    def getDevices(self):
+        cur=self.conn.cursor()
+        cur.execute("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
+        devices=[]
+        for IP,port,instance in cur.fetchall():
+            devices.append(((IP,port),instance))
+        cur.close()
+        return devices
+    

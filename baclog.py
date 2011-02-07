@@ -6,7 +6,7 @@ import ConfigParser as configparser
 import postgres as database
 ## Site configuration database. [Database.driver stores value; not implemented]
 #import postgres as config
-import console as config
+#import console as config
 
 import bacnet
 import scheduler
@@ -55,10 +55,14 @@ class FindObjects(Task):
 
 class COVNotification(Task):
     def run(self):
-        while True:    
-            response=yield None
-            notification=response.message
-            print "COVNotification>", notification.object, notification.values.presentValue.value
+        response=yield None ## bootstrap
+        while True:
+            if not isinstance(response, Message):
+                response=yield None
+                continue
+            m=response.message
+            print "COVNotification>", m.object, m.values.presentValue.value._value.value
+            response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.values.presentValue.value._value.value)
 
 
 #### Main Class
@@ -82,14 +86,14 @@ class BacLog:
     def run(self):
         ## Configure Device
         device=self.config.getint('Network','device')
-        db=config.Database()
-        devices=db.getDevices();
+#        db=config.Database()
+#        devices=db.getDevices();
 
         ## Configure operation using scheduler task GetDevices
-#        task=database.GetDevices(self.dbh)
-#        self.scheduler.add(task)
-#        self.scheduler.run()
-#        devices=task.devices
+        task=database.GetDevices()
+        self.scheduler.add(task)
+        self.scheduler.run()
+        devices=task.devices
 
         print "BacLog.run>", devices
 
@@ -119,6 +123,7 @@ class BacLog:
         scheduler.add(objects)
         scheduler.run()
 
+        ## Terminate
         self.shutdown()
 
     def shutdown(self):

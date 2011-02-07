@@ -15,7 +15,7 @@ SEP="\n"
 
 ## PhaseII Data types
 class Tagged:
-    _value=None
+    #_value=None
     def __init__(self,*args,**kwargs):
         '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
         #print "Tagged> %s " % self.__class__, args, kwargs
@@ -225,7 +225,7 @@ class Bitstring(Tagged):
         if self._size: ## FIXME: this should be removed, all bit strings should have a defined size
             self._value=[0]*self._size
         
-    def __str__(self):
+    def __repr__(self):
         output=['<<']
         for f,v in enumerate(self._value):
             if v:
@@ -260,6 +260,10 @@ class ObjectIdentifier(Tagged):
     def __repr__(self):
         return "<%s,%d>" % (bacnet.ObjectType._display[self.objectType],self.instance)
 
+## Application brings data in without context through property.
+##  * Property should (through the use of current object) 
+##    apply context (enumeration, bit string) to this data.
+
 class Application(Tagged):
     _application=[
                   None,             # [A0] NULL
@@ -284,14 +288,15 @@ class Application(Tagged):
         DataClass = self._application[num]
         #print "Application>", num, DataClass
         element=DataClass(data=data,tag=tag)
+        self._value=element
         self.value=element._value
         #print "Application.decode>", element._value
 
         if opentag!=None:
             self._closeTag(data,opentag)
 
-    def __str__(self):
-        return "<%s>" % self.value
+    def __repr__(self):
+        return "<(%s)>" % self.value
 
 class Property(Tagged):
     '''
@@ -309,10 +314,12 @@ class Property(Tagged):
         
     def _decode(self,data):
         self._value=self._type(data=data,tag=self._tag)
+#        ## TODO: Fix Application to use object for presentValue enumerations
+#        if self._type==Application:        
+#            self._value=self._value._value ## drop application container
         
     def _encode(self,tagnum=None):
         if debug: print "Property.encode>", tagnum, self._property, self._type
-        
         return self._openTag(tagnum)+self._value._encode()+self._closeTag()
                 
     def __repr__(self):
@@ -367,7 +374,7 @@ class Sequence(Tagged):
                 encoded.append(cls(element)._encode(tagnum))
         return string.join(encoded,'')
     
-    def __str__(self):
+    def __repr__(self):
         start=self._sequencestart
         output=["{%s;" % self.__class__]
         for tagnum,(name,cls) in enumerate(self._sequence):
@@ -428,7 +435,7 @@ class SequenceOf(Tagged):
     def __iter__(self):
         return self._value.__iter__()
 
-    def __str__(self):
+    def __repr__(self):
         start=self._sequenceof._sequencestart
         output=["<<"]
         output.append(SEP)
@@ -457,7 +464,7 @@ class Array(Tagged):
     def __iter__(self):
         return self._value.__iter__()
 
-    def __str__(self):
+    def __repr__(self):
         output=["["]
         for v in self._value:
             output.append(" %s," % v)
