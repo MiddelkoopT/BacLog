@@ -316,6 +316,8 @@ class Property(Tagged):
         return self._openTag(tagnum)+self._value._encode()+self._closeTag()
                 
     def __repr__(self):
+        if self._property==None:
+            return str(self._value)
         return "%s=%s" % (self._property, self._value)
 
 ## Composite types

@@ -1,45 +1,23 @@
 #!/usr/bin/python
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
-import binascii
 import ConfigParser as configparser
 
-## Use which data store.  [Database.driver stores value; not implemented]
 import postgres as database
-#import console as database
+## Site configuration database. [Database.driver stores value; not implemented]
+#import postgres as config
+import console as config
 
 import bacnet
 import scheduler
 import message
+import service
 
 from scheduler import Task
 from message import Message
-from binhex import hexbin
 
 debug=True
 trace=False
-
-
-class Test(Task):
-    def run(self):
-        ## Test packet generation (scheduler conversion)
-        request=bacnet.ReadProperty('presentValue','binaryOutput',20,)
-        response=yield Message(('192.168.83.100',47808),request)
-        print "Test>", response
-        
-class GetDevices(Task):
-    def __init__(self,dbh):
-        Task.__init__(self)
-        self.dbh=dbh
-        self.devices=[]
-
-    def run(self):
-        query=self.dbh.query("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
-        response=yield query
-        self.devices=[]
-        for IP,port,instance in response:
-            self.devices.append(((IP,port),instance))
-        print "GetDevices>", self.devices
 
 class FindObjects(Task):
     def __init__(self,devices):
@@ -47,7 +25,6 @@ class FindObjects(Task):
         self.devices=devices
         
     def run(self):
-        ## FIXME: Enumerations should be defined this way (convert to undersocre notation).
         ioObjectTypes=[
                        bacnet.ObjectType.binaryOutput, #@UndefinedVariable
                        bacnet.ObjectType.binaryInput,  #@UndefinedVariable
@@ -67,97 +44,22 @@ class FindObjects(Task):
                 response=yield Message(target,request)
                 print "FindObjects> value:", response
             
-                ## subscribe to COV for 2 min.
+                ## SubscribeCOV
                 subscribe=bacnet.SubscribeCOV()
                 subscribe.pid=pid
                 subscribe.object=o
                 subscribe.confirmed=False
-                subscribe.lifetime=120
+                subscribe.lifetime=300
                 ack=yield Message(target, subscribe)
-                print "FindObjects>", ack
+                if trace: print "FindObjects> Subscribe ACK", ack
 
 class COVNotification(Task):
     def run(self):
         while True:    
-            notification=yield None
-            print "COVNotification>", notification
+            response=yield None
+            notification=response.message
+            print "COVNotification>", notification.object, notification.values.presentValue.value
 
-
-class WhoIs(Task):
-    def run(self):
-        whois=yield None ## boot
-        while True:
-            print "WhoIs>", whois
-            iam=bacnet.IAm()
-            iam.object=bacnet.ObjectIdentifier('device',self.device)
-            iam.maxlength=1024
-            iam.segmentation=bacnet.Segmented.noSegmentation #@UndefinedVariable
-            iam.vendor=65535
-            print "WhoIs>", iam
-            whois=yield Message(whois.remote,iam)
-
-class Device:
-    _properties=[
-                ('protocolServicesSupported',['whoIs','readPropertyMultiple','unconfirmedCOVNotification','readProperty']),
-                ('objectName','BL'),
-                ('systemStatus','operational'),
-                ('vendorIdentifier',65535),
-                ('segmentation','noSegmentation'),
-                ('maxAPDU',1024),
-                ('maxSegments',1),
-                ('APDUSegmentationTimeout',0),
-                ('APDURetries',0),
-                ('APDUTimeout',0),
-                ]
-    def __init__(self,device):
-        self.property={}
-        self._properties.append(('objectIdentifier',('device',device)))
-        for property,init in self._properties:
-            identifier=bacnet.PropertyIdentifier(property)
-            if type(init)==type(tuple()):
-                value=bacnet.Property(identifier,*init)
-            else:
-                value=bacnet.Property(identifier,init)
-            self.property[identifier]=value
-
-
-class ReadPropertyMultiple(Task):
-    def run(self):
-        request=yield None ## boot
-        while True:
-            if trace: print "ReadPropertyMultiple>", request
-            response=bacnet.ReadPropertyMultipleResponse()
-            for object in request.message:
-                assert object.object.instance==self.device ## support only Device
-                result=response.Add()
-                result.object=object.object
-                device=Device(self.device)
-                for reference in object.list:
-                    value=device.property.get(reference.property,None)
-                    if value==None: continue
-                    item=result.list.Add()
-                    item.property=reference.property
-                    item.value=value
-                    item.index=None
-            
-            if trace: print "ReadPropertyMultiple>", request.invoke, response
-            request=yield Message(request.remote,response,request.invoke)
-
-class ReadProperty(Task):
-    def run(self):
-        request=yield None ## boot
-        while True:
-            if trace: print "PropertyMultiple>", request
-            assert request.message.object.instance==self.device ## support only Device
-            device=Device(self.device)
-            response=bacnet.ReadPropertyResponse()
-            response.object=request.message.object
-            response.property=request.message.property
-            response.value=device.property[request.message.property]
-            response.index=None
-            
-            if trace: print "ReadProperty>", request.invoke, response
-            request=yield Message(request.remote,response,request.invoke)
 
 #### Main Class
 
@@ -168,7 +70,7 @@ class BacLog:
         self.config.read(('baclog.ini','local.ini'))
         bind=self.config.get('Network','bind')
         port=self.config.getint('Network','port')
-        #print "BacLog>"
+        print "BacLog.run> init:", (bind, port)
         
         ## I/O scheduler and drivers
         self.scheduler=scheduler.init()
@@ -177,53 +79,51 @@ class BacLog:
         self.dbh=database.DatabaseHandler()
         self.scheduler.addHandler(self.dbh)
         
-    def shutdown(self):
-        self.scheduler.shutdown()
-        exit()
-
     def run(self):
-        ## Runtime information
-        scheduler=self.scheduler
+        ## Configure Device
         device=self.config.getint('Network','device')
+        db=config.Database()
+        devices=db.getDevices();
 
-        ## Read list of devices from database
-#        db=database.Database()
-#        devices=db.getDevices();
-#        print "BacLog.run>", devices
+        ## Configure operation using scheduler task GetDevices
+#        task=database.GetDevices(self.dbh)
+#        self.scheduler.add(task)
+#        self.scheduler.run()
+#        devices=task.devices
 
-        ## Test
-        d=Device(device)
-        print "###",d.property
+        print "BacLog.run>", devices
 
-        ## Configure using scheduler task GetDevices
-        devices=GetDevices(self.dbh)
-        scheduler.add(devices)
-        scheduler.run()
+        ## Setup scheduler
+        scheduler=self.scheduler
 
         ## Add services after information is known
-        whois=WhoIs()
+        whois=service.WhoIs()
         whois.device=device
         scheduler.add(whois)
         self.mh.addService(whois,bacnet.WhoIs)
         
-        properties=ReadPropertyMultiple()
+        properties=service.ReadPropertyMultiple()
         properties.device=device
         properties.name='BacLog'
         scheduler.add(properties)
         self.mh.addService(properties,bacnet.ReadPropertyMultiple)
         
-        property=ReadProperty()
+        property=service.ReadProperty()
         property.device=device
         property.name='BacLog'
         scheduler.add(property)
         self.mh.addService(property, bacnet.ReadProperty)
         
         ## Find objects and register COV
-        objects=FindObjects(devices.devices)
+        objects=FindObjects(devices)
         scheduler.add(objects)
         scheduler.run()
 
         self.shutdown()
+
+    def shutdown(self):
+        self.scheduler.shutdown()
+        exit()
 
 if __name__=='__main__':
     main=BacLog()

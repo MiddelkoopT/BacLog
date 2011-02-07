@@ -37,7 +37,7 @@ class MessageHandler:
         
         
     def addService(self,task,service):
-        print "MessageHandler.addService>", service._servicechoice, service
+        if debug: print "MessageHandler.addService>", service._servicechoice, service
         self.service[service._pdutype][service._servicechoice]=task
         
     ## Handler API
@@ -57,7 +57,7 @@ class MessageHandler:
             p.invoke=self.invoke
             self.wait[p.invoke]=work.tid
 
-        if debug: print "MessageHandler.put>", remote, p.invoke, p._display(request)
+        if debug: print "MessageHandler.put>", remote, p.invoke
         self.send.append((remote,p._encode(request)))
         
     def writing(self):

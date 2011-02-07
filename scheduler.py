@@ -45,7 +45,7 @@ class Scheduler:
 
                 ## Nothing to do.
                 if (not sr) and (not sw) and (not sx):
-                    if debug: print "Scheduler.run> empty"
+                    if trace: print "Scheduler.run> empty"
                     break
 
                 block=0 ## Data exists do not block
@@ -68,14 +68,14 @@ class Scheduler:
                     work=h.get()  ## Handlers do the paring.
                     if work:
                         self.done.append(work)
-                    if debug: print "Scheduler.run> pair", work
+                    if trace: print "Scheduler.run> pair", work
             
             ## Deliver responses to tasks and collect new messages.
             while self.done:
                 try:
                     work=self.done.pop(0)
+                    if debug: print "Scheduler.run> done", work
                     task=self.task[work.tid]
-                    if debug: "Scheduler.run> done", work.tid, work.response
                     send=task.send(work.response) ## coroutine yield return
                     if send:
                         if debug: print "Scheduler.run> work", send
@@ -85,7 +85,7 @@ class Scheduler:
                     del self.task[work.tid]
                     continue
 
-        print "Scheduler.run> done", self.work, self.done
+        if debug: print "Scheduler.run> done", self.work, self.done
         assert not self.work and not self.done
         
     def shutdown(self):

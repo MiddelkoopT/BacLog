@@ -2,9 +2,13 @@
 ## Database Driver
 
 import psycopg2.extras
+from scheduler import Task
+
 
 debug=False
 trace=False
+
+## Synchronous Interface
 
 class Database:
     def __init__(self,database='baclog'):
@@ -19,6 +23,8 @@ class Database:
             devices.append(((IP,port),instance))
         cur.close()
         return devices
+    
+## Asynchronous interface
     
 class Query:
     cursor=None
@@ -43,7 +49,7 @@ class Query:
         
 
 class DatabaseHandler:
-    """IO handler for scheduler class"""
+    """Database IO handler for scheduler class"""
     POLL_OK=psycopg2.extensions.POLL_OK         # 0
     POLL_READ=psycopg2.extensions.POLL_READ     # 1
     POLL_WRITE=psycopg2.extensions.POLL_WRITE   # 2
@@ -99,3 +105,19 @@ class DatabaseHandler:
     
     def shutdown(self):
         self.conn.close()
+
+## Database Tasks
+
+class GetDevices(Task):
+    def __init__(self,dbh):
+        Task.__init__(self)
+        self.dbh=dbh
+        self.devices=[]
+
+    def run(self):
+        query=self.dbh.query("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
+        response=yield query
+        self.devices=[]
+        for IP,port,instance in response:
+            self.devices.append(((IP,port),instance))
+        print "GetDevices>", self.devices
