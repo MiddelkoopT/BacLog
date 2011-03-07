@@ -60,7 +60,7 @@ class FindObjects(Task):
                     subscribe.lifetime=LIFETIME
                     ack=yield Message(target, subscribe)
                     if debug: print "FindObjects> Subscribe ACK", ack
-            yield scheduler.Wait(LIFETIME-60)
+            yield scheduler.Wait(LIFETIME-90)
 
 class COVNotification(Task):
     def run(self):

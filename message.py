@@ -52,8 +52,15 @@ class MessageHandler:
         if work.request.invoke!=None:
             p.invoke=work.request.invoke
         else:
-            self.invoke+=1 ## Increment counter
-            assert self.invoke<255 ## FIXME: handle wrap/outstanding on self.wait array.
+            self.invoke=(self.invoke+1)%256 ## Increment counter
+            if self.wait.has_key(self.invoke):
+                print "MessageHandler.put> invoke search", self.wait, self.invoke
+                self.invoke=None
+                for i in range(0,256):
+                    if not self.wait.has_key(i):
+                        self.invoke=i
+                        break
+                assert self.invoke!=None ## could not find empty slot
             p.invoke=self.invoke
             self.wait[p.invoke]=work.tid
 
@@ -88,10 +95,10 @@ class MessageHandler:
         tid=None
         if(p.pdutype==0x3): ## ComplexACK
             message=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
-            tid=self.wait[p.invoke]
+            tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
         elif p.pdutype==0x2: ## SimpleACK
             message=bacnet.Boolean(True)
-            tid=self.wait[p.invoke]
+            tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
         else: ## Unconfirmed and Confirmed Request
             service=bacnet.ServiceChoice[p.pdutype].get(p.servicechoice,None)
             if not service:
