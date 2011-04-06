@@ -72,7 +72,10 @@ class MessageHandler:
     
     def reading(self):
         return True
-        
+    
+    def ready(self):
+        return False
+    
     def write(self):
         remote,data=self.send.pop(0)
         sent=self.socket.sendto(data, remote)

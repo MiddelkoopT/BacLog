@@ -39,6 +39,8 @@ class Scheduler:
             if self.done: 
                 block=0
             while True:
+                
+                ## fd queue
                 r,w,x=[],[],[]
                 for h in self.handler:
                     h.reading() and r.append(h.socket)
@@ -49,38 +51,51 @@ class Scheduler:
                 assert not sx
                 if trace: print "Scheduler.run> select", sr,sw,sx
                 
+                ## Sockets are in "ready" state and will "process"
+                ready=[]
+                for h in self.handler:
+                    h.ready() and ready.append(h)
+                
                 ## Command queue
-                cmd=[]
-                for w in self.cmd:
-                    if w.request.done():
-                        if debug: print "Sheduler.run> cmd", w
-                        w.response=w.request.get()
-                        self.done.append(w)
-                        continue
-                    cmd.append(w)
-                self.cmd=cmd
+                next,cmd=[],[]
+                for c in self.cmd:
+                    if c.request.done():
+                        cmd.append(c)
+                    else:
+                        next.append(c)
+                self.cmd=next
 
-                ## Nothing to do.
-                if (not sr) and (not sw) and (not sx):
+                ## scheduler is empty.
+                if (not sr) and (not sw) and (not sx) and (not cmd) and (not ready):
                     if trace: print "Scheduler.run> empty"
                     break
+                
+                ## Process Data
 
                 block=0 ## Data exists do not block
 
-                ## Send
-                for s in sw:
-                    if trace: print "Scheduler.run> write"
-                    handler=self.socket[s]
-                    handler.write()
-    
                 ## Recv
                 for s in sr:
                     if trace: print "Scheduler.run> read"
                     handler=self.socket[s]
                     handler.read()
 
-                if self.done: ## command processing.
-                    break
+                ## Send
+                for s in sw:
+                    if trace: print "Scheduler.run> write"
+                    handler=self.socket[s]
+                    handler.write()
+                    
+                ## Ready
+                for h in ready:
+                    if trace: print "Scheduler.run> process"
+                    h.process() 
+    
+                ## Cmd (not a fd handler)
+                for c in cmd:
+                    if trace: print "Scheduler.run> cmd"
+                    c.response=c.request.get()
+                    self.done.append(c)
             
             ## Pair responses
             for h in self.handler:
@@ -96,7 +111,7 @@ class Scheduler:
                     work=self.done.pop(0)
                     if debug: print "Scheduler.run> done", work
                     task=self.task[work.tid]
-                    send=task.send(work.response) ## coroutine yield return
+                    send=task.send(work.response) ## coroutine yield
                     if send:
                         if debug: print "Scheduler.run> work", send
                         send._handler.put(Work(work.tid,send))

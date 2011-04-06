@@ -3,6 +3,7 @@
 
 import ConfigParser as configparser
 
+import console
 import postgres as database
 ## Site configuration database. [Database.driver stores value; not implemented]
 #import postgres as config
@@ -20,6 +21,7 @@ debug=True
 trace=False
 
 LIFETIME=300
+LOCALCONFIG=True
 
 class Ping(Task):
     def run(self):
@@ -95,14 +97,16 @@ class BacLog:
     def run(self):
         ## Configure Device
         device=self.config.getint('Network','device')
-#        db=config.Database()
-#        devices=db.getDevices();
-
-        ## Configure operation using scheduler task GetDevices
-        task=database.GetDevices()
-        self.scheduler.add(task)
-        self.scheduler.run()
-        devices=task.devices
+        if(LOCALCONFIG):
+            ## Use local.ini to get devices.
+            db=console.Database()
+            devices=db.getDevices();
+        else:
+            ## Configure operation using scheduler task GetDevices
+            task=database.GetDevices()
+            self.scheduler.add(task)
+            self.scheduler.run()
+            devices=task.devices
 
         print "BacLog.run>", devices
 

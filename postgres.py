@@ -32,8 +32,10 @@ class Query:
             response=self.cursor.rowcount ## Not a query 
         else:
             response=self.cursor.fetchall()
-        self.cursor.close()
         return response
+    
+    def close(self):
+        self.cursor.close() ## accesses FD
         
 
 class DatabaseHandler:
@@ -42,18 +44,27 @@ class DatabaseHandler:
     POLL_READ=psycopg2.extensions.POLL_READ     # 1
     POLL_WRITE=psycopg2.extensions.POLL_WRITE   # 2
     POLL_ERROR=psycopg2.extensions.POLL_ERROR   # 3
+    IDLE,EXECUTE,FETCH,CLOSE = range(4)
     
     def __init__(self,database='baclog'):
         if trace: print "DatabaseHandler>", database
+        
+        ## Handler API]
+        self.send=False
+        self.recv=False
+
+        ## Database
         self.conn=psycopg2.connect(database=database,async=1)
         psycopg2.extras.wait_select(self.conn) ## Block; connections are expensive anyways.
         self.socket=self.conn.fileno()
-        ## Postgresql does not support multiple queries on one connection/fd
-        self.send=None
-        self.recv=None
-        self.wait=None
+
+        ## Internal state
+        self.state=self.IDLE
+        self.work=None   ## current work
+        
         Query._handler=Query._handler or self ## default handler
         
+    ## internal shortcut.
     def query(self,query,*args):
         return Query(self,query,*args)
         
@@ -62,34 +73,52 @@ class DatabaseHandler:
     def put(self,work):
         if debug: print "DatabaseHandler.put>", work.tid, work.request.query
         assert not self.send ## Database can only handle one simultaneous query.
-        self.send=work
-
-    def writing(self):
-        return self.send!=None or self.conn.poll()==self.POLL_WRITE
+        self.send=True
+        self.work=work
+        self.work.request.execute()
+        self.state=DatabaseHandler.EXECUTE ## Excuting
 
     def reading(self):
-        return self.wait!=None or self.conn.poll()==self.POLL_READ
-        
-    def write(self):
-        if trace: print "DatabaseHandler.write>", self.send, self.conn.poll(), self.conn.isexecuting()
-        if self.conn.isexecuting():
-            return
-        self.send.request.execute()
-        self.wait=self.send
-        self.send=None
+        return self.conn.poll()==self.POLL_READ
 
+    def writing(self):
+        return self.conn.poll()==self.POLL_WRITE
+    
+    def ready(self):
+        if self.state==self.IDLE:
+            return False
+        return self.conn.poll()==self.POLL_OK
+
+    def process(self):
+        if trace: print "DatabaseHandler.process>", self.state
+        assert self.conn.poll()==self.POLL_OK
+        assert not self.conn.isexecuting()
+
+        ## State machine.
+        if self.state==DatabaseHandler.EXECUTE:
+            self.work.response=self.work.request.fetch()
+            self.state=DatabaseHandler.FETCH
+        elif self.state==DatabaseHandler.FETCH:
+            self.work.request.close()
+            self.work.request=None
+            self.state=DatabaseHandler.CLOSE
+        elif self.state==DatabaseHandler.CLOSE:
+            self.recv=True ## Data now availabe.
+            self.state=DatabaseHandler.IDLE
+        
+    ## Socket must be in "ready" state before processing (idle)
     def read(self):
-        if trace: print "DatabaseHandler.read>", self.conn.poll()
-        self.recv=self.wait
-        self.wait=None
+        pass
+    def write(self):
+        pass
         
     def get(self):
-        if trace: print "DatabaseHandler.get>", self.recv.tid
-        work=self.recv
-        work.response=work.request.fetch()
-        work.request=None
-        self.recv=None
-        if debug: print "DatabaseHandler.get>", work.tid, work.response
+        if debug: print "DatabaseHandler.get>", self.work.tid, self.work.response
+        assert self.recv
+        work=self.work
+        self.send=False
+        self.recv=False
+        self.work=None
         return work
     
     def shutdown(self):
