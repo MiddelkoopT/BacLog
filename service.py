@@ -13,7 +13,7 @@ trace=False
 class Device:
     _properties=[
                 ('protocolServicesSupported',['whoIs','readPropertyMultiple','unconfirmedCOVNotification','readProperty']),
-                ('objectName','BL'),
+                ('objectName','BACLOG'),
                 ('systemStatus','operational'),
                 ('vendorIdentifier',65535),
                 ('segmentation','noSegmentation'),

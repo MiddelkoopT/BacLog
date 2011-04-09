@@ -20,13 +20,15 @@ from message import Message
 debug=True
 trace=False
 
+## Hard coded config (bad boy)
 LIFETIME=300
 LOCALCONFIG=True
+SUBSCRIBECOV=True
 
 class Ping(Task):
     def run(self):
         for i in range(1,10):
-            ping=yield scheduler.Wait(2)
+            ping=yield scheduler.Wait(1)
             print "Ping>",i,ping
 
 class FindObjects(Task):
@@ -53,7 +55,22 @@ class FindObjects(Task):
                     request=bacnet.ReadProperty('presentValue',o)
                     response=yield Message(target,request)
                     if trace: print "FindObjects> value:", response
-                
+
+                    ## TEST
+                    
+                    ## Log value
+                    #m=response.message
+                    #response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+                    #yield scheduler.Wait(.1) ## DELAY
+                    
+                    ## Name
+                    request=bacnet.ReadProperty('description',o)
+                    response=yield Message(target,request)
+                    if debug: print "FindObjects> value:", response
+                    
+                    ## /TEST
+                    if not SUBSCRIBECOV: continue
+                    
                     ## SubscribeCOV
                     subscribe=bacnet.SubscribeCOV()
                     subscribe.pid=pid
@@ -62,7 +79,8 @@ class FindObjects(Task):
                     subscribe.lifetime=LIFETIME
                     ack=yield Message(target, subscribe)
                     if debug: print "FindObjects> Subscribe ACK", ack
-            yield scheduler.Wait(LIFETIME-90)
+            yield scheduler.Wait(1)
+            #yield scheduler.Wait(LIFETIME-90)
 
 class COVNotification(Task):
     def run(self):

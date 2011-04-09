@@ -27,6 +27,7 @@ class PropertyIdentifier(Enumerated):
                   'APDUSegmentationTimeout':10,
                   'APDUTimeout':11,
                   'APDURetries':73,
+                  'description':28,
                   }
     
 class ServicesSupported(Bitstring):

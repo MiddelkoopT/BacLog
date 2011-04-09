@@ -8,6 +8,7 @@ debug=False
 trace=False
 
 class Scheduler:
+    SLEEP=0.1
     def __init__(self):
         if debug: print "Scheduler>"
         self.task={}
@@ -35,7 +36,7 @@ class Scheduler:
     def run(self):
         if debug: print "Scheduler.run> start"
         while self.task:
-            block=2 ## start off with blocking.
+            block=self.SLEEP ## start off with blocking.
             if self.done: 
                 block=0
             while True:
