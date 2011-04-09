@@ -17,7 +17,7 @@ import service
 from scheduler import Task
 from message import Message
 
-debug=True
+debug=False
 trace=False
 
 ## Hard coded config (bad boy)
@@ -59,9 +59,9 @@ class FindObjects(Task):
                     ## TEST
                     
                     ## Log value
-                    #m=response.message
-                    #response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
-                    #yield scheduler.Wait(.1) ## DELAY
+                    m=response.message
+                    response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+                    yield scheduler.Wait(.1) ## DELAY
                     
                     ## Name
                     request=bacnet.ReadProperty('description',o)
@@ -90,7 +90,7 @@ class COVNotification(Task):
                 response=yield None
                 continue
             m=response.message
-            print "COVNotification>", m.object, m.values.presentValue.value._value.value
+            if debug: print "COVNotification>", m.object, m.values.presentValue.value._value.value
             response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.values.presentValue.value._value.value)
 
 

@@ -44,14 +44,14 @@ class DatabaseHandler:
     POLL_READ=psycopg2.extensions.POLL_READ     # 1
     POLL_WRITE=psycopg2.extensions.POLL_WRITE   # 2
     POLL_ERROR=psycopg2.extensions.POLL_ERROR   # 3
-    IDLE,EXECUTE,FETCH,CLOSE = range(4)
+    IDLE,WAIT,EXECUTE,FETCH,CLOSE = range(5)
     
     def __init__(self,database='baclog'):
         if trace: print "DatabaseHandler>", database
         
-        ## Handler API]
-        self.send=False
-        self.recv=False
+        ## Handler API
+        self.send=[]
+        self.recv=[]
 
         ## Database
         self.conn=psycopg2.connect(database=database,async=1)
@@ -71,12 +71,14 @@ class DatabaseHandler:
     ## Handler API
         
     def put(self,work):
-        if debug: print "DatabaseHandler.put>", work.tid, work.request.query
-        assert not self.send ## Database can only handle one simultaneous query.
-        self.send=True
-        self.work=work
-        self.work.request.execute()
-        self.state=DatabaseHandler.EXECUTE ## Excuting
+        if debug: print "DatabaseHandler.put>", len(self.send), work.tid, work.request.query
+        if self.state==DatabaseHandler.IDLE: ## handler idle so start work immediately
+            ## duplicate code from state machine
+            self.work=work
+            work.request.execute()
+            self.state=DatabaseHandler.EXECUTE
+        else:
+            self.send.append(work)
 
     def reading(self):
         return self.conn.poll()==self.POLL_READ
@@ -94,7 +96,14 @@ class DatabaseHandler:
         assert self.conn.poll()==self.POLL_OK
         assert not self.conn.isexecuting()
 
+        if len(self.send)>0: print "DatabaseHandler.process> queue", len(self.send)
+
         ## State machine.
+        if self.state==DatabaseHandler.WAIT:
+            ## duplicate code in put()
+            self.work=self.send.pop()
+            self.work.request.execute()
+            self.state=DatabaseHandler.EXECUTE
         if self.state==DatabaseHandler.EXECUTE:
             self.work.response=self.work.request.fetch()
             self.state=DatabaseHandler.FETCH
@@ -103,8 +112,11 @@ class DatabaseHandler:
             self.work.request=None
             self.state=DatabaseHandler.CLOSE
         elif self.state==DatabaseHandler.CLOSE:
-            self.recv=True ## Data now availabe.
+            self.recv.append(self.work) ## Data now available.
+            self.work=None ## Idle
             self.state=DatabaseHandler.IDLE
+            if self.send: ## more data to process
+                self.state=DatabaseHandler.WAIT
         
     ## Socket must be in "ready" state before processing (idle)
     def read(self):
@@ -113,13 +125,12 @@ class DatabaseHandler:
         pass
         
     def get(self):
-        if debug: print "DatabaseHandler.get>", self.work.tid, self.work.response
-        assert self.recv
-        work=self.work
-        self.send=False
-        self.recv=False
-        self.work=None
-        return work
+        if len(self.recv)>1: print "DatabaseHandler.get> queue", len(self.send)
+        if self.recv:
+            work=self.recv.pop()
+            if debug: print "DatabaseHandler.get>", len(self.recv), work.tid, work.response
+            return work 
+        return None
     
     def shutdown(self):
         self.conn.close()
