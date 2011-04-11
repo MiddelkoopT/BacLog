@@ -156,6 +156,27 @@ class Log(Query):
         now=psycopg2.TimestampFromTicks(time.time())
         Query.__init__(self,query, now,IP,port,instance,value,status,objectID)
 
+#CREATE TABLE Objects (
+#    objectID SERIAL,         -- object ID - object definition (temporal)
+#    deviceID integer,         -- device ID - device definition (temporal)
+#    pointID integer,         -- point ID - physical point definition
+#    instance integer,         -- object instance
+#    type integer,             -- BACnet ObjectType
+#    description char(32),    -- BACnet description
+#    first timestamp,         -- first time seen, valid until last
+#    last timestamp,         -- last time seen (NULL indicates live object)
+#    CONSTRAINT Objects_PK PRIMARY KEY (objectID)
+#);
+
+class Object(Query):
+    '''
+    Build Object Query
+    '''
+    def __init__(self,deviceID,pointID,instance,type,description):
+        query="INSERT INTO Objects (first,deviceID,pointID,instance,type,description) VALUES (%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
+        now=psycopg2.TimestampFromTicks(time.time())
+        Query.__init__(self,query, now,deviceID,pointID,instance,type,description)
+
 ## Synchronous Interface
 
 class Database:

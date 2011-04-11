@@ -17,7 +17,7 @@ import service
 from scheduler import Task
 from message import Message
 
-debug=False
+debug=True
 trace=False
 
 ## Hard coded config (bad boy)
@@ -52,23 +52,22 @@ class FindObjects(Task):
                     if o.objectType not in ioObjectTypes:
                         continue
                     if debug: print "FindObjects>", o
-                    request=bacnet.ReadProperty('presentValue',o)
-                    response=yield Message(target,request)
-                    if trace: print "FindObjects> value:", response
+                    yield scheduler.Wait(0.5) ## DELAY
 
-                    ## TEST
-                    
-                    ## Log value
-                    m=response.message
-                    response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
-                    yield scheduler.Wait(.1) ## DELAY
-                    
-                    ## Name
+                    ## Get and log description
                     request=bacnet.ReadProperty('description',o)
                     response=yield Message(target,request)
-                    if debug: print "FindObjects> value:", response
+                    m=response.message
+                    if debug: print "FindObjects> description:", m.value.value
+                    response=yield database.Object(instance,None,m.object.instance,m.object.objectType,m.value.value)
                     
-                    ## /TEST
+                    ## Get and log presentValue
+                    request=bacnet.ReadProperty('presentValue',o)
+                    response=yield Message(target,request)
+                    m=response.message
+                    if debug: print "FindObjects> value:", m.value.value
+                    response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+                    
                     if not SUBSCRIBECOV: continue
                     
                     ## SubscribeCOV
@@ -79,8 +78,9 @@ class FindObjects(Task):
                     subscribe.lifetime=LIFETIME
                     ack=yield Message(target, subscribe)
                     if debug: print "FindObjects> Subscribe ACK", ack
-            yield scheduler.Wait(1)
-            #yield scheduler.Wait(LIFETIME-90)
+
+            #yield scheduler.Wait(1)
+            yield scheduler.Wait(LIFETIME-90)
 
 class COVNotification(Task):
     def run(self):
