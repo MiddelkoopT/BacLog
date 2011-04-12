@@ -3,6 +3,9 @@ setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap
 
 Capture filter: udp port 47808
 
+wireshark -k -i <( ssh baclog.ad.ufl.edu /usr/sbin/tcpdump -i eth0 -s 0 -w - port 47808 )
+
+
 ## SQL log
 select * FROM Log WHERE age(NOW(),time) < interval '00:00:10';
 while sleep 1; do psql baclog --tuples-only -c "select * FROM Log WHERE age(NOW(),time) < interval '00:00:01';" ; done
