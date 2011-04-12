@@ -46,13 +46,19 @@ class FindObjects(Task):
         pid=Task.scheduler.add(COVNotification())
         while True:
             for target,instance in self.devices:
-                readproperty=bacnet.ReadProperty('objectList','device',instance)
-                properties=yield Message(target,readproperty)
-                for o in properties.message.value:
+                if debug: print "FindObjects> ** device start:",instance
+                object=0
+                while True:
+                    object+=1
+                    yield scheduler.Wait(0.1) ## DELAY
+                    readproperty=bacnet.ReadProperty('objectList','device',instance,object)
+                    property=yield Message(target,readproperty)
+                    if isinstance(property.message, bacnet.Error):
+                        break
+                    o=property.message.value[0]
+                    if debug: print "FindObjects>", o
                     if o.objectType not in ioObjectTypes:
                         continue
-                    if debug: print "FindObjects>", o
-                    yield scheduler.Wait(0.5) ## DELAY
 
                     ## Get and log description
                     request=bacnet.ReadProperty('description',o)
@@ -78,7 +84,8 @@ class FindObjects(Task):
                     subscribe.lifetime=LIFETIME
                     ack=yield Message(target, subscribe)
                     if debug: print "FindObjects> Subscribe ACK", ack
-
+                
+                if debug: print "FindObjects> ** device end:",instance
             #yield scheduler.Wait(1)
             yield scheduler.Wait(LIFETIME-90)
 

@@ -86,7 +86,30 @@ class SimpleACK(Tagged):
 class ConfirmedServiceACK(Sequence):
     _pdutype=0x3 # ComplexACK
 
+class ErrorACK(Sequence):
+    _pdutype=0x5 # Error
+
+## Error product.
+
+class ErrorClass(Enumerated):
+    _enumeration={
+                  'property':2,
+                  }
+    
+class ErrorCode(Enumerated):
+    _enumeration={
+                  'invalidArrayIndex':42,
+                  }
+
 ## Services
+
+class Error(ErrorACK):
+    _servicechoice=12 # readProperty
+    _context=False # context values not used.
+    _sequence=[
+               ('class',ErrorClass), # [0] error-class
+               ('code',ErrorCode),   # [1] error-clode
+               ]
 
 class UnconfirmedCOVNotification(UnconfirmedServiceRequest):
     _servicechoice=2 # unconfirmedCOVNotification
@@ -122,13 +145,15 @@ class ReadProperty(ConfirmedServiceRequest):
                ('property',PropertyIdentifier), # [1] propertyIdentifier
                ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
                ]
-    def _set(self,property=None,object=None,objectInstance=None):
+    def _set(self,property=None,object=None,objectInstance=None,index=None):
         '''ReadProperty convience constructor'''
         if property!=None and object!=None:
             self.property=PropertyIdentifier(property)
             if objectInstance!=None:
                 object=ObjectIdentifier(object,objectInstance)
             self.object=object
+        if index!=None:
+            self.index=index
 
 class PropertyReference(Sequence):
     _sequence=[

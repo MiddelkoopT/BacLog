@@ -96,12 +96,17 @@ class MessageHandler:
         p=packet.PDU[p.pdutype](data=recv)
         message=None
         tid=None
+        ## Response messages.
         if(p.pdutype==0x3): ## ComplexACK
             message=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
             tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
         elif p.pdutype==0x2: ## SimpleACK
             message=bacnet.Boolean(True)
             tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
+        elif p.pdutype==0x5: ## Error
+            message=bacnet.Error(data=p) ## service choice is ignored since most are "Error"
+            tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
+        ## Request messages
         else: ## Unconfirmed and Confirmed Request
             service=bacnet.ServiceChoice[p.pdutype].get(p.servicechoice,None)
             if not service:

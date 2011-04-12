@@ -362,9 +362,14 @@ class Sequence(Tagged):
         opentag=self._openTag()
         start=self._sequencestart
         if debug: print "Sequence.decode> ############", opentag, self.__class__
+        tagnum=-1
         while self._getCloseTag(data,opentag):
             num,cls,lvt=self._getTag() #@UnusedVariable
-            name, DataClass = self._sequence[num+start]
+            if not self._context: ## context not encoded
+                tagnum+=1
+            else:
+                tagnum=num+start
+            name, DataClass = self._sequence[tagnum]
             if issubclass(DataClass, Property): ## Hard coded context for Property
                 element=Property(self.property,data=data,tag=self._getTag())._value
             else:
@@ -476,6 +481,9 @@ class Array(Tagged):
             self._value.append(item)
             #print "Array.decode>", item
         #print "Array.decode> -----------", opentag
+
+    def __getitem__(self,index):
+        return self._value[index]
 
     def __iter__(self):
         return self._value.__iter__()
