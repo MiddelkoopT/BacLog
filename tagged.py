@@ -116,7 +116,7 @@ class Tagged:
         '''Default fixed formatting found in self._format'''
         num,cls,length=self._getTag() #@UnusedVariable
         self._value,=struct.unpack(self._format,data._get(length))
-        print "Tagged.decode>", self.__class__, self._value
+        #print "Tagged.decode>", self.__class__, self._value
 
     def _encode(self,tagnum=None):
         '''Default fixed formatting found in self._format'''

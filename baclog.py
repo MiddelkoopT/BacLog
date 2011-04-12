@@ -38,6 +38,8 @@ class FindObjects(Task):
         
     def run(self):
         ioObjectTypes=[
+                       bacnet.ObjectType.analogInput,  #@UndefinedVariable
+                       bacnet.ObjectType.analogOutput, #@UndefinedVariable
                        bacnet.ObjectType.binaryOutput, #@UndefinedVariable
                        bacnet.ObjectType.binaryInput,  #@UndefinedVariable
                        ]
@@ -50,7 +52,7 @@ class FindObjects(Task):
                 object=0
                 while True:
                     object+=1
-                    yield scheduler.Wait(0.1) ## DELAY
+                    yield scheduler.Wait(0.01) ## DELAY
                     readproperty=bacnet.ReadProperty('objectList','device',instance,object)
                     property=yield Message(target,readproperty)
                     if isinstance(property.message, bacnet.Error):

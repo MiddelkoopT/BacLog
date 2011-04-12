@@ -41,6 +41,8 @@ class ServicesSupported(Bitstring):
 
 class ObjectType(Enumerated):
     _enumeration={
+                  'analogInput':0,
+                  'analogOutput':1,
                   'analogValue':2,
                   'binaryInput':3,
                   'binaryOutput':4,
