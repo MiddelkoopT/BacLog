@@ -31,7 +31,11 @@ class Tagged:
             self._decode(data)
             
     def _getTag(self,data=None):
-        '''Update current tag and return tag value, no data indicates last tag'''
+        '''
+        Update current tag and return tag value
+           None no more data,
+           negative lvt indicates open/close tag
+        '''
         if data==None:
             return self._tag
         
@@ -45,13 +49,16 @@ class Tagged:
         lvt=(tag&0x07)
 
         assert num!=0xF   ## unsupported extended tag number
-        if lvt==5: ## extended length tag
-            lvt,=struct.unpack("!B",data._get())
-        elif lvt>5: 
-            lvt=-lvt ## negative indicates open/close       
-        assert lvt<253 ## unsupported extended lvt
+        if lvt<5:
+            length=lvt
+        elif lvt==5: ## extended length tag
+            length,=struct.unpack("!B",data._get())
+            assert length!=254 ## unsupported extended lvt
+        elif lvt>5:  ## open/close tag
+            length=-lvt ## negative indicates open/close       
 
-        self._tag=(num,cls,lvt)
+        self._tag=(num,cls,length)
+        #print "Tagged.getTag>", self._tag
         return self._tag
     
     def _setTag(self,num,cls,lvt):
@@ -79,6 +86,7 @@ class Tagged:
         num,cls,lvt=self._tag
         if (cls==1 and lvt==-6): ## application start tag
             return num ## opentag number
+        return False ## not an open tag but data.
 
     def _setOpenTag(self,tagnum=None):
         assert tagnum!=None
@@ -311,7 +319,7 @@ class Application(Tagged):
         self.value=element._value
         #print "Application.decode>", element._value
 
-        if opentag!=None:
+        if opentag!=False:
             self._getCloseTag(data,opentag)
 
     def __repr__(self):
@@ -332,7 +340,17 @@ class Property(Tagged):
         if debug: print "Property.init>", property, self._type
         
     def _decode(self,data):
+        ## remove context open tag for non Application,Array, and SequenceOf tags (they consume them)
+        ## consider adding a self._opentag to Tagged to indicate consumption of open/close tag.
+        opentag=self._openTag()
+        if opentag!=False and (not issubclass(self._type, (Application,Array,SequenceOf))):
+            self._getTag(data) ## read next tag
+        else:
+            opentag=False ## do not read close tag.
+            
         self._value=self._type(data=data,tag=self._getTag())
+        if opentag!=False:
+            self._getCloseTag(data, opentag)
         
     def _encode(self,tagnum=None):
         if debug: print "Property.encode>", tagnum, self._identifier, self._type

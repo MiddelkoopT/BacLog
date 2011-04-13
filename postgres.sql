@@ -37,6 +37,7 @@ CREATE TABLE Objects (
 	pointID integer, 		-- point ID - physical point definition
 	instance integer, 		-- object instance
 	type integer, 			-- BACnet ObjectType
+	name char(32),	        -- BACnet ObjectName
 	description char(32),	-- BACnet description
 	first timestamp, 		-- first time seen, valid until last
 	last timestamp, 		-- last time seen (NULL indicates live object)

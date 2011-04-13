@@ -172,10 +172,10 @@ class Object(Query):
     '''
     Build Object Query
     '''
-    def __init__(self,deviceID,pointID,instance,type,description):
-        query="INSERT INTO Objects (first,deviceID,pointID,instance,type,description) VALUES (%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
+    def __init__(self,deviceID,pointID,instance,type,name,description=None):
+        query="INSERT INTO Objects (first,deviceID,pointID,instance,type,name,description) VALUES (%s,%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
         now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query, now,deviceID,pointID,instance,type,description)
+        Query.__init__(self,query, now,deviceID,pointID,instance,type,name,description)
 
 ## Synchronous Interface
 

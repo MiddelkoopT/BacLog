@@ -20,10 +20,11 @@ from message import Message
 debug=True
 trace=False
 
-## Hard coded config (bad boy)
-LIFETIME=300
+## Hard coded config (bad!)
+LIFETIME=3600
 LOCALCONFIG=True
 SUBSCRIBECOV=True
+GETPRESENTVALUE=False
 
 class Ping(Task):
     def run(self):
@@ -52,44 +53,43 @@ class FindObjects(Task):
                 object=0
                 while True:
                     object+=1
-                    yield scheduler.Wait(0.01) ## DELAY
                     readproperty=bacnet.ReadProperty('objectList','device',instance,object)
                     property=yield Message(target,readproperty)
                     if isinstance(property.message, bacnet.Error):
                         break
-                    o=property.message.value[0]
+                    o=property.message.value[0] ## Object
                     if debug: print "FindObjects>", o
                     if o.objectType not in ioObjectTypes:
                         continue
 
-                    ## Get and log description
-                    request=bacnet.ReadProperty('description',o)
-                    response=yield Message(target,request)
-                    m=response.message
-                    if debug: print "FindObjects> description:", m.value.value
-                    response=yield database.Object(instance,None,m.object.instance,m.object.objectType,m.value.value)
+                    ## Get description and log object
+                    response=yield Message(target,bacnet.ReadProperty('objectName',o))
+                    name=response.message.value._value
+                    response=yield Message(target,bacnet.ReadProperty('description',o))
+                    description=response.message.value.value
+                    if debug: print "FindObjects> name:", name, description
+                    response=yield database.Object(instance,None,o.instance,o.objectType,name,description)
                     
                     ## Get and log presentValue
-                    request=bacnet.ReadProperty('presentValue',o)
-                    response=yield Message(target,request)
-                    m=response.message
-                    if debug: print "FindObjects> value:", m.value.value
-                    response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+                    if GETPRESENTVALUE:
+                        request=bacnet.ReadProperty('presentValue',o)
+                        response=yield Message(target,request)
+                        m=response.message
+                        if debug: print "FindObjects> value:", m.value.value
+                        response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
                     
-                    if not SUBSCRIBECOV: continue
-                    
-                    ## SubscribeCOV
-                    subscribe=bacnet.SubscribeCOV()
-                    subscribe.pid=pid
-                    subscribe.object=o
-                    subscribe.confirmed=False
-                    subscribe.lifetime=LIFETIME
-                    ack=yield Message(target, subscribe)
-                    if debug: print "FindObjects> Subscribe ACK", ack
+                    if SUBSCRIBECOV:
+                        subscribe=bacnet.SubscribeCOV()
+                        subscribe.pid=pid
+                        subscribe.object=o
+                        subscribe.confirmed=False
+                        subscribe.lifetime=LIFETIME
+                        ack=yield Message(target, subscribe)
+                        if debug: print "FindObjects> Subscribe ACK", ack
                 
                 if debug: print "FindObjects> ** device end:",instance
             #yield scheduler.Wait(1)
-            yield scheduler.Wait(LIFETIME-90)
+            yield scheduler.Wait(LIFETIME-300)
 
 class COVNotification(Task):
     def run(self):

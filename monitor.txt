@@ -1,8 +1,9 @@
+## Development tools
+rsync -av *.py baclog.ad.ufl.edu:BacLog/
+
 ## Rather permiscuous but works for single user machines.
 setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap
-
 Capture filter: udp port 47808
-
 wireshark -k -i <( ssh baclog.ad.ufl.edu /usr/sbin/tcpdump -i eth0 -s 0 -w - port 47808 )
 
 
