@@ -50,6 +50,10 @@ class FindObjects(Task):
         while True:
             for target,instance in self.devices:
                 if debug: print "FindObjects> ** device start:",instance
+                response=yield Message(target,bacnet.ReadProperty('objectName','device',instance))
+                name=response.message.value._value
+                response=yield database.Device(target[0],target[1],instance,name)
+                
                 object=0
                 while True:
                     object+=1
@@ -85,7 +89,7 @@ class FindObjects(Task):
                         subscribe.confirmed=False
                         subscribe.lifetime=LIFETIME
                         ack=yield Message(target, subscribe)
-                        if debug: print "FindObjects> Subscribe ACK", ack
+                        if trace: print "FindObjects> Subscribe ACK", ack
                 
                 if debug: print "FindObjects> ** device end:",instance
             #yield scheduler.Wait(1)

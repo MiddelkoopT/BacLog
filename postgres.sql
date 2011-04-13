@@ -4,56 +4,56 @@
 -- BACnet device at the time of use (IP devices)
 DROP TABLE IF EXISTS Devices;
 CREATE TABLE Devices (
-	deviceID SERIAL, 		-- Internal device ID
+	deviceID SERIAL, 			-- Internal device ID
 	IP inet,
 	port integer,
-	network integer, 		-- BACnet network number (should be the same)
-	instance integer, 		-- device instance (unique to network)
-	name varchar, 			-- device description
-	first timestamp, 		-- first seen
-	last timestamp, 		-- valid until (NULL indicates live object)
+	network integer, 			-- BACnet network number (should be the same)
+	instance integer, 			-- device instance (unique to network)
+	name varchar, 				-- device description
+	first timestamp,	 		-- first seen
+	last timestamp, 			-- valid until (NULL indicates live object)
 	CONSTRAINT Devices_PK PRIMARY KEY (deviceID)
 );
 
 -- Points.  Physical equipment maped to an object a point in time.
 DROP TABLE IF EXISTS Points;
 CREATE TABLE Points ( 
-	pointID SERIAL, 		-- Internal point ID
-	name varchar, 			-- Full point name
-	building char(32), 		-- Building Name
-	room char(32), 			-- Room number/location
-	unit char(32), 			-- Sensor, actuator, or device name/number
-	description char(32), 	-- Description example: ROOM TEMP
-	first timestamp, 		-- first seen
-	last timestamp, 		-- valid until (NULL indicates live point)
+	pointID SERIAL, 			-- Internal point ID
+	name varchar, 				-- Full point name
+	building char(32), 			-- Building Name
+	room char(32), 				-- Room number/location
+	unit char(32), 				-- Sensor, actuator, or device name/number
+	description varchar, 		-- Description example: ROOM TEMP
+	first timestamp, 			-- first seen
+	last timestamp, 			-- valid until (NULL indicates live point)
 	CONSTRAINT Points_PK PRIMARY KEY (pointID)
 );
 
 -- BACnet points at the time of use.
 DROP TABLE IF EXISTS Objects;
 CREATE TABLE Objects (
-	objectID SERIAL, 		-- object ID - object definition (temporal)
-	deviceID integer, 		-- device ID - device definition (temporal)
-	pointID integer, 		-- point ID - physical point definition
-	instance integer, 		-- object instance
-	type integer, 			-- BACnet ObjectType
-	name char(32),	        -- BACnet ObjectName
-	description char(32),	-- BACnet description
-	first timestamp, 		-- first time seen, valid until last
-	last timestamp, 		-- last time seen (NULL indicates live object)
+	objectID SERIAL, 			-- object ID - object definition (temporal)
+	deviceID integer, 			-- device ID - device definition (temporal)
+	pointID integer, 			-- point ID - physical point definition
+	instance integer, 			-- object instance
+	type integer, 				-- BACnet ObjectType
+	name varchar,		      	-- BACnet ObjectName
+	description varchar,		-- BACnet description
+	first timestamp, 			-- first time seen, valid until last
+	last timestamp, 			-- last time seen (NULL indicates live object)
 	CONSTRAINT Objects_PK PRIMARY KEY (objectID)
 );
 
 -- Log Data
 DROP TABLE IF EXISTS Log;
 CREATE TABLE Log (
-	time timestamp, 		-- time measurement occured.
-	IP inet, 				-- Used for logging
-	port integer, 			--
-	instance integer, 		--
-	objectID integer, 		-- object ID from Objects
-	status integer, 		-- what happened COV/ERROR etc.
-	value real 				-- recorded value
+	time timestamp, 			-- time measurement occured.
+	IP inet, 					-- Used for logging
+	port integer, 				--
+	instance integer,	 		--
+	objectID integer, 			-- object ID from Objects
+	status integer, 			-- what happened COV/ERROR etc.
+	value real 					-- recorded value
 );
 
 

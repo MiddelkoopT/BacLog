@@ -96,7 +96,7 @@ class DatabaseHandler:
         assert self.conn.poll()==self.POLL_OK
         assert not self.conn.isexecuting()
 
-        if len(self.send)>0: print "DatabaseHandler.process> queue", len(self.send)
+        if len(self.send)>3: print "DatabaseHandler.process> queue", len(self.send)
 
         ## State machine.
         if self.state==DatabaseHandler.WAIT:
@@ -147,35 +147,26 @@ class GetDevices(Task):
             self.devices.append(((IP,port),instance))
         print "GetDevices>", self.devices
 
+## Insert Queries (basic)
+
 class Log(Query):
-    '''
-    Build Log Query
-    '''
     def __init__(self,IP,port,instance,value,status=None,objectID=None):
         query="INSERT INTO Log (time,IP,port,instance,value,status,objectID) VALUES (%s,%s,%s,%s,%s,%s,%s);"
         now=psycopg2.TimestampFromTicks(time.time())
         Query.__init__(self,query, now,IP,port,instance,value,status,objectID)
 
-#CREATE TABLE Objects (
-#    objectID SERIAL,         -- object ID - object definition (temporal)
-#    deviceID integer,         -- device ID - device definition (temporal)
-#    pointID integer,         -- point ID - physical point definition
-#    instance integer,         -- object instance
-#    type integer,             -- BACnet ObjectType
-#    description char(32),    -- BACnet description
-#    first timestamp,         -- first time seen, valid until last
-#    last timestamp,         -- last time seen (NULL indicates live object)
-#    CONSTRAINT Objects_PK PRIMARY KEY (objectID)
-#);
-
 class Object(Query):
-    '''
-    Build Object Query
-    '''
     def __init__(self,deviceID,pointID,instance,type,name,description=None):
         query="INSERT INTO Objects (first,deviceID,pointID,instance,type,name,description) VALUES (%s,%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
         now=psycopg2.TimestampFromTicks(time.time())
         Query.__init__(self,query, now,deviceID,pointID,instance,type,name,description)
+
+class Device(Query):
+    def __init__(self,IP,port,device,name):
+        query="INSERT INTO Devices (first,IP,port,instance,name) VALUES (%s,%s,%s,%s,%s)  RETURNING deviceID;"
+        now=psycopg2.TimestampFromTicks(time.time())
+        Query.__init__(self,query,now, IP,port,device,name)
+
 
 ## Synchronous Interface
 
