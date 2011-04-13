@@ -54,18 +54,21 @@ class FindObjects(Task):
                 name=response.message.value._value
                 response=yield database.Device(target[0],target[1],instance,name)
                 
-                object=0
+                objects=[]
+                index=0
                 while True:
-                    object+=1
-                    readproperty=bacnet.ReadProperty('objectList','device',instance,object)
+                    index+=1
+                    readproperty=bacnet.ReadProperty('objectList','device',instance,index)
                     property=yield Message(target,readproperty)
                     if isinstance(property.message, bacnet.Error):
                         break
                     o=property.message.value[0] ## Object
                     if debug: print "FindObjects>", o
-                    if o.objectType not in ioObjectTypes:
-                        continue
+                    if o.objectType in ioObjectTypes:
+                        objects.append(o)
 
+                if debug: print "FindObjects> ** device objects:",instance
+                for o in objects:
                     ## Get description and log object
                     response=yield Message(target,bacnet.ReadProperty('objectName',o))
                     name=response.message.value._value
@@ -75,14 +78,19 @@ class FindObjects(Task):
                     response=yield database.Object(instance,None,o.instance,o.objectType,name,description)
                     
                     ## Get and log presentValue
-                    if GETPRESENTVALUE:
+                if GETPRESENTVALUE:
+                    if debug: print "FindObjects> ** device read values:",instance
+                    for o in objects:
                         request=bacnet.ReadProperty('presentValue',o)
                         response=yield Message(target,request)
                         m=response.message
                         if debug: print "FindObjects> value:", m.value.value
                         response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+
                     
-                    if SUBSCRIBECOV:
+                if SUBSCRIBECOV:
+                    if debug: print "FindObjects> ** device subscribe:",instance
+                    for o in objects:
                         subscribe=bacnet.SubscribeCOV()
                         subscribe.pid=pid
                         subscribe.object=o
