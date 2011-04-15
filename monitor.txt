@@ -13,6 +13,11 @@ while sleep 1; do psql baclog --tuples-only -c "select * FROM Log WHERE age(NOW(
 
 ## ncat -l 47809  --keep-open --udp --exec "/usr/bin/tee -a test.txt"
 
+## PXC
+Field Panel/FLN/Drop/Point
+9001/0/0/1
+Enable Point
+
 #### read-property present-value
 ## BackNet packet Invoke 1, Point LDO/BO instance 20.
 Send:   810a001101040003010c0c010000141955

@@ -23,7 +23,7 @@ trace=False
 ## Hard coded config (bad!)
 LIFETIME=3600
 LOCALCONFIG=True
-SUBSCRIBECOV=True
+SUBSCRIBECOV=False
 GETPRESENTVALUE=False
 
 class Ping(Task):
@@ -69,7 +69,6 @@ class FindObjects(Task):
 
                 if debug: print "FindObjects> ** device objects:",instance
                 for o in objects:
-                    ## Get description and log object
                     response=yield Message(target,bacnet.ReadProperty('objectName',o))
                     name=response.message.value._value
                     response=yield Message(target,bacnet.ReadProperty('description',o))
@@ -77,7 +76,6 @@ class FindObjects(Task):
                     if debug: print "FindObjects> name:", name, description
                     response=yield database.Object(instance,None,o.instance,o.objectType,name,description)
                     
-                    ## Get and log presentValue
                 if GETPRESENTVALUE:
                     if debug: print "FindObjects> ** device read values:",instance
                     for o in objects:
@@ -98,10 +96,9 @@ class FindObjects(Task):
                         subscribe.lifetime=LIFETIME
                         ack=yield Message(target, subscribe)
                         if trace: print "FindObjects> Subscribe ACK", ack
-                
+                    yield scheduler.Wait(LIFETIME-300)
+
                 if debug: print "FindObjects> ** device end:",instance
-            #yield scheduler.Wait(1)
-            yield scheduler.Wait(LIFETIME-300)
 
 class COVNotification(Task):
     def run(self):

@@ -58,7 +58,7 @@ CREATE TABLE Log (
 
 
 -- Sample Data/Test
-INSERT INTO Devices 
-	(IP,port,instance,first) 
-VALUES 
-	('192.168.83.100',47808,9001,NOW());
+--INSERT INTO Devices 
+--	(IP,port,instance,first) 
+--VALUES 
+--	('192.168.83.100',47808,9001,NOW());

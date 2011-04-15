@@ -46,8 +46,15 @@ class ObjectType(Enumerated):
                   'analogValue':2,
                   'binaryInput':3,
                   'binaryOutput':4,
+                  'binarValue':5,
+                  'calendar':6,
+                  'command':7,
                   'device':8,
+                  'eventEnrollment':9,
                   'file':10,
+                  'notificationClass':15,
+                  'schedule':17,
+                  'trendLog':20,
                   }
 
 class Segmented(Enumerated): # BACnetSegmentation
