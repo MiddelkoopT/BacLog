@@ -191,7 +191,7 @@ class Unsigned16(Unsigned):
     _size=2
 
 class Float(Tagged):
-    _format='f'
+    _format='!f'
 
 class Boolean(Tagged):
     _format='B'
@@ -262,6 +262,9 @@ class Bitstring(Tagged):
         return string.join(output,'')
         
 class ObjectIdentifier(Tagged):
+    '''
+    ObjectIdentifier(type,instance)
+    '''
     _num=12 ## application tag number
     def _decode(self,data):
         num,cls,length=self._getTag() #@UnusedVariable

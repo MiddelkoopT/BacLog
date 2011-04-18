@@ -1,4 +1,4 @@
-## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
+## BacLog Copyright 2010,2011 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Services
 
 import bacnet

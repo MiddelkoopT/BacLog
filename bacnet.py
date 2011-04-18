@@ -46,7 +46,7 @@ class ObjectType(Enumerated):
                   'analogValue':2,
                   'binaryInput':3,
                   'binaryOutput':4,
-                  'binarValue':5,
+                  'binaryValue':5,
                   'calendar':6,
                   'command':7,
                   'device':8,

@@ -8,7 +8,7 @@ CREATE TABLE Devices (
 	IP inet,
 	port integer,
 	network integer, 			-- BACnet network number (should be the same)
-	instance integer, 			-- device instance (unique to network)
+	device integer, 			-- device instance (unique to network)
 	name varchar, 				-- device description
 	first timestamp,	 		-- first seen
 	last timestamp, 			-- valid until (NULL indicates live object)
@@ -35,9 +35,9 @@ CREATE TABLE Objects (
 	objectID SERIAL, 			-- object ID - object definition (temporal)
 	deviceID integer, 			-- device ID - device definition (temporal)
 	pointID integer, 			-- point ID - physical point definition
-	instance integer, 			-- object instance
-	type integer, 				-- BACnet ObjectType
-	name varchar,		      	-- BACnet ObjectName
+	instance integer, 			-- BACnet objectInstance
+	type integer, 				-- BACnet objectType
+	name varchar,		      	-- BACnet objectName
 	description varchar,		-- BACnet description
 	first timestamp, 			-- first time seen, valid until last
 	last timestamp, 			-- last time seen (NULL indicates live object)
@@ -48,10 +48,10 @@ CREATE TABLE Objects (
 DROP TABLE IF EXISTS Log;
 CREATE TABLE Log (
 	time timestamp, 			-- time measurement occured.
-	IP inet, 					-- Used for logging
-	port integer, 				--
-	instance integer,	 		--
-	objectID integer, 			-- object ID from Objects
+	IP inet, 					-- remote IP
+	port integer, 				-- remote port
+	instance integer,	 		-- remote object instance
+	objectID integer, 			-- objectID (post processed)
 	status integer, 			-- what happened COV/ERROR etc.
 	value real 					-- recorded value
 );

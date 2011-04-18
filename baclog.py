@@ -2,17 +2,17 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 
 import ConfigParser as configparser
-
-import console
-import postgres as database
-## Site configuration database. [Database.driver stores value; not implemented]
-#import postgres as config
-#import console as config
+config=None
 
 import bacnet
 import scheduler
 import message
 import service
+
+import object
+
+import console
+import postgres as database
 
 from scheduler import Task
 from message import Message
@@ -20,17 +20,37 @@ from message import Message
 debug=True
 trace=False
 
-## Hard coded config (bad!)
-LIFETIME=3600
-LOCALCONFIG=True
-SUBSCRIBECOV=False
-GETPRESENTVALUE=False
-
 class Ping(Task):
     def run(self):
         for i in range(1,10):
             ping=yield scheduler.Wait(1)
             print "Ping>",i,ping
+
+class GetPresentValue(Task):
+    def run(self):
+        if debug: print "GetPresentValue> ** device read values:", self.target
+        for o in self.target.objects:
+            request=bacnet.ReadProperty('presentValue',o.objectIdentifier)
+            response=yield Message(self.target.address,request)
+            m=response.message
+            if debug: print "GetPresentValue> value:", m.value.value
+            response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+
+
+class SubscribeCOV(Task):
+    def run(self):
+        while True:
+            if debug: print "SubscribeCOV> ** device subscribe:",self.target
+            for o in self.target.objects:
+                subscribe=bacnet.SubscribeCOV()
+                subscribe.pid=self.pid
+                subscribe.object=o.objectIdentifier
+                subscribe.confirmed=False
+                subscribe.lifetime=self.lifetime
+                ack=yield Message(self.target.address, subscribe)
+                if trace: print "FindObjects> Subscribe ACK", ack
+            yield scheduler.Wait(int(self.lifetime*0.90))
+
 
 class FindObjects(Task):
     def __init__(self,devices):
@@ -45,60 +65,38 @@ class FindObjects(Task):
                        bacnet.ObjectType.binaryInput,  #@UndefinedVariable
                        ]
 
-        ## Create new notification task.
-        pid=Task.scheduler.add(COVNotification())
-        while True:
-            for target,instance in self.devices:
-                if debug: print "FindObjects> ** device start:",instance
-                response=yield Message(target,bacnet.ReadProperty('objectName','device',instance))
+        for target in self.devices:
+            if debug: print "FindObjects> ** device start:", target
+            response=yield Message(target.address,bacnet.ReadProperty('objectName','device',target.device))
+            name=response.message.value._value
+            response=yield database.Device(target.IP,target.port,target.device,name)
+            deviceID,=response.pop()
+            
+            objects=[]
+            index=0
+            while True:
+                index+=1
+                readproperty=bacnet.ReadProperty('objectList','device',target.device,index)
+                property=yield Message(target.address,readproperty)
+                if isinstance(property.message, bacnet.Error):
+                    break
+                o=property.message.value[0] ## Object
+                if debug: print "FindObjects>", o
+                if o.objectType in ioObjectTypes:
+                    objects.append(o)
+
+            if debug: print "FindObjects> ** device objects:",target.device
+            for o in objects:
+                response=yield Message(target.address,bacnet.ReadProperty('objectName',o))
                 name=response.message.value._value
-                response=yield database.Device(target[0],target[1],instance,name)
+                response=yield Message(target.address,bacnet.ReadProperty('description',o))
+                description=response.message.value.value
+                if debug: print "FindObjects> name:", name, description
+                response=yield database.Object(deviceID,None,o.instance,o.objectType,name,description)
+                objectID,=response.pop()
+                target.objects.append(object.Object(objectID,o.instance,o.objectType,name))
                 
-                objects=[]
-                index=0
-                while True:
-                    index+=1
-                    readproperty=bacnet.ReadProperty('objectList','device',instance,index)
-                    property=yield Message(target,readproperty)
-                    if isinstance(property.message, bacnet.Error):
-                        break
-                    o=property.message.value[0] ## Object
-                    if debug: print "FindObjects>", o
-                    if o.objectType in ioObjectTypes:
-                        objects.append(o)
-
-                if debug: print "FindObjects> ** device objects:",instance
-                for o in objects:
-                    response=yield Message(target,bacnet.ReadProperty('objectName',o))
-                    name=response.message.value._value
-                    response=yield Message(target,bacnet.ReadProperty('description',o))
-                    description=response.message.value.value
-                    if debug: print "FindObjects> name:", name, description
-                    response=yield database.Object(instance,None,o.instance,o.objectType,name,description)
-                    
-                if GETPRESENTVALUE:
-                    if debug: print "FindObjects> ** device read values:",instance
-                    for o in objects:
-                        request=bacnet.ReadProperty('presentValue',o)
-                        response=yield Message(target,request)
-                        m=response.message
-                        if debug: print "FindObjects> value:", m.value.value
-                        response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
-
-                    
-                if SUBSCRIBECOV:
-                    if debug: print "FindObjects> ** device subscribe:",instance
-                    for o in objects:
-                        subscribe=bacnet.SubscribeCOV()
-                        subscribe.pid=pid
-                        subscribe.object=o
-                        subscribe.confirmed=False
-                        subscribe.lifetime=LIFETIME
-                        ack=yield Message(target, subscribe)
-                        if trace: print "FindObjects> Subscribe ACK", ack
-                    yield scheduler.Wait(LIFETIME-300)
-
-                if debug: print "FindObjects> ** device end:",instance
+            if debug: print "FindObjects> ** device end:",target.device
 
 class COVNotification(Task):
     def run(self):
@@ -117,10 +115,11 @@ class COVNotification(Task):
 class BacLog:
     def __init__(self):
         ## Configure
-        self.config=configparser.ConfigParser()
-        self.config.read(('baclog.ini','local.ini'))
-        bind=self.config.get('Network','bind')
-        port=self.config.getint('Network','port')
+        global config
+        config=configparser.ConfigParser()
+        config.read(('baclog.ini','local.ini'))
+        bind=config.get('Network','bind')
+        port=config.getint('Network','port')
         print "BacLog.run> init:", (bind, port)
         
         ## I/O scheduler and drivers
@@ -131,47 +130,78 @@ class BacLog:
         self.scheduler.addHandler(self.dbh)
         
     def run(self):
-        ## Configure Device
-        device=self.config.getint('Network','device')
-        if(LOCALCONFIG):
-            ## Use local.ini to get devices.
-            db=console.Database()
-            devices=db.getDevices();
-        else:
+        ## Setup scheduler
+        scheduler=self.scheduler
+        device=config.getint('Network','device')
+        
+        ## Object Discovery
+        
+        bootstrap=config.getboolean('Options','bootstrap')
+        if not bootstrap:
             ## Configure operation using scheduler task GetDevices
             task=database.GetDevices()
             self.scheduler.add(task)
             self.scheduler.run()
             devices=task.devices
+            
+        if bootstrap or (not devices):
+            ## Use local.ini to get devices.
+            db=console.Database()
+            devices=db.getDevices();
+            objects=FindObjects(devices)
+            scheduler.add(objects)
+            scheduler.run()
 
         print "BacLog.run>", devices
+        if debug:
+            for d in devices:
+                print d.objects
 
-        ## Setup scheduler
-        scheduler=self.scheduler
-        
-        ## Add services after information is known
-        whois=service.WhoIs()
-        whois.device=device
-        scheduler.add(whois)
-        self.mh.addService(whois,bacnet.WhoIs)
-        
+        ## Do an initial scan of values and exit
+        if config.getboolean('Options','getinitialvalue'):
+            for target in devices:
+                scan=GetPresentValue()
+                scan.target=target
+                scheduler.add(scan)
+            scheduler.run()
+            scheduler.shutdown()
+            return
+
+        ## Configure Device
+
+        property=service.ReadProperty()
+        property.device=device
+        property.name=config.get('Network','name')
+        scheduler.add(property)
+        self.mh.addService(property, bacnet.ReadProperty)
+
         properties=service.ReadPropertyMultiple()
         properties.device=device
         properties.name='BacLog'
         scheduler.add(properties)
         self.mh.addService(properties,bacnet.ReadPropertyMultiple)
-        
-        property=service.ReadProperty()
-        property.device=device
-        property.name='BacLog'
-        scheduler.add(property)
-        self.mh.addService(property, bacnet.ReadProperty)
-        
-        ## Find objects and register COV
-        objects=FindObjects(devices)
-        scheduler.add(objects)
-        scheduler.run()
 
+        whois=service.WhoIs()
+        whois.device=device
+        scheduler.add(whois)
+        self.mh.addService(whois,bacnet.WhoIs)
+
+        cov_pid=scheduler.add(COVNotification())
+        
+        ## Application
+        
+        if config.getboolean('Options','subscribeCOV'):
+            lifetime=config.getint('Options','lifetime')
+            for target in devices:
+                cov=SubscribeCOV()
+                cov.target=target
+                cov.pid=cov_pid
+                cov.lifetime=lifetime
+                scheduler.add(cov)
+
+        ## Run scheduler.
+        scheduler.run()
+        
         ## Terminate
         self.shutdown()
 
@@ -180,5 +210,7 @@ class BacLog:
         exit()
 
 if __name__=='__main__':
+    print "BacLog> start"
     main=BacLog()
     main.run()
+    print "BacLog> done"

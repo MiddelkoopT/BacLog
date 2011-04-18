@@ -5,6 +5,7 @@ import time
 import psycopg2.extras
 from scheduler import Task
 
+import object
 
 debug=False
 trace=False
@@ -140,12 +141,19 @@ class DatabaseHandler:
 class GetDevices(Task):
     devices=None
     def run(self):
-        query=Query("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
+        query=Query("SELECT deviceID,IP,port,device FROM Devices WHERE last IS NULL")
         response=yield query
         self.devices=[]
-        for IP,port,instance in response:
-            self.devices.append(((IP,port),instance))
-        print "GetDevices>", self.devices
+        for deviceID,IP,port,device in response:
+            device=object.Device(IP,port,device,deviceID)
+            self.devices.append(device)
+        if debug: print "postgres.GetDevices>", self.devices
+        for d in self.devices:
+            query=Query("SELECT objectID,instance,type,name FROM Objects WHERE deviceID=%s" % (d.id))
+            response=yield query
+            for o in response:
+                d.objects.append(object.Object(*o))
+            
 
 ## Insert Queries (basic)
 
@@ -163,9 +171,15 @@ class Object(Query):
 
 class Device(Query):
     def __init__(self,IP,port,device,name):
-        query="INSERT INTO Devices (first,IP,port,instance,name) VALUES (%s,%s,%s,%s,%s)  RETURNING deviceID;"
+        query="""
+UPDATE Devices SET last=%s WHERE IP=%s AND port=%s AND device=%s;
+INSERT INTO Devices (first,IP,port,device,name) VALUES (%s,%s,%s,%s,%s)
+  RETURNING deviceID;
+        """
         now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query,now, IP,port,device,name)
+        Query.__init__(self,query, 
+                       now,IP,port,device,
+                       now,IP,port,device,name)
 
 
 ## Synchronous Interface
@@ -175,12 +189,16 @@ class Database:
         self.conn=psycopg2.connect(database=database)
         self.database=database
 
-    def getDevices(self):
-        cur=self.conn.cursor()
-        cur.execute("SELECT IP,port,instance FROM Devices WHERE last IS NULL")
-        devices=[]
-        for IP,port,instance in cur.fetchall():
-            devices.append(((IP,port),instance))
-        cur.close()
-        return devices
+    def query(self,query):
+        '''
+        Run an asynchronous query synchronously.
+        '''
+        query.execute()
+        result=query.fetch()
+        query.close()
+        return result
     
+    def close(self):
+        self.conn.close()
+        self.conn=None
+        self.database=None
