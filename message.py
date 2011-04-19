@@ -54,7 +54,7 @@ class MessageHandler:
         else:
             self.invoke=(self.invoke+1)%256 ## Increment counter
             if self.wait.has_key(self.invoke):
-                print "MessageHandler.put> invoke search", self.wait, self.invoke
+                print "MessageHandler.put> invoke search", self.invoke, self.wait 
                 self.invoke=None
                 for i in range(0,256):
                     if not self.wait.has_key(i):

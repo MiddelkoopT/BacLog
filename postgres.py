@@ -73,6 +73,7 @@ class DatabaseHandler:
         
     def put(self,work):
         if debug: print "DatabaseHandler.put>", len(self.send), work.tid, work.request.query
+        if len(self.send)>8: print "DatabaseHandler.process> queue", len(self.send)
         if self.state==DatabaseHandler.IDLE: ## handler idle so start work immediately
             ## duplicate code from state machine
             self.work=work
@@ -96,8 +97,6 @@ class DatabaseHandler:
         if trace: print "DatabaseHandler.process>", self.state
         assert self.conn.poll()==self.POLL_OK
         assert not self.conn.isexecuting()
-
-        if len(self.send)>3: print "DatabaseHandler.process> queue", len(self.send)
 
         ## State machine.
         if self.state==DatabaseHandler.WAIT:

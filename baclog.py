@@ -40,7 +40,7 @@ class GetPresentValue(Task):
 class SubscribeCOV(Task):
     def run(self):
         while True:
-            if debug: print "SubscribeCOV> ** device subscribe:",self.target
+            if debug: print "SubscribeCOV> ** device subscribe:", self.target
             for o in self.target.objects:
                 subscribe=bacnet.SubscribeCOV()
                 subscribe.pid=self.pid
@@ -106,7 +106,7 @@ class COVNotification(Task):
                 response=yield None
                 continue
             m=response.message
-            if debug: print "COVNotification>", m.object, m.values.presentValue.value._value.value
+            if trace: print "COVNotification>", m.object, m.values.presentValue.value._value.value
             response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.values.presentValue.value._value.value)
 
 
@@ -153,7 +153,7 @@ class BacLog:
             scheduler.run()
 
         print "BacLog.run>", devices
-        if debug:
+        if trace:
             for d in devices:
                 print d.objects
 
