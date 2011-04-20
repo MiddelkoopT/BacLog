@@ -8,21 +8,24 @@ import packet
 import bacnet
 import scheduler
 
+
 debug=False
 trace=False
 
 class Message:
     _handler=None
-    def __init__(self,remote,message=None,invoke=None):
+    def __init__(self,remote,message=None,invoke=None,timeout=0.5):
         self.remote=remote
         self.message=message
         self.invoke=invoke
+        self.timeout=timeout
 
     def __repr__(self):
         return "[[%s:%s]]" % (self.remote,self.message)
 
 class MessageHandler:
     """IO handler for scheduler class"""
+    TIMEOUT=0.1
     def __init__(self, address, port):
         if debug: print "MessageHandler>", address, port
         self.send=[]
@@ -32,6 +35,8 @@ class MessageHandler:
         self.socket.setblocking(0)
         self.invoke=0
         self.wait={}
+        self.timeout={}
+        self.sleep=0
         self.service=[[None]*16]*8  ## Service Table
         Message._handler=Message._handler or self
         
@@ -45,11 +50,12 @@ class MessageHandler:
     def put(self,work):
         request=work.request.message
         remote=work.request.remote
+        timeout=work.request.timeout
 
         p=packet.PDU[request._pdutype]()
         p.servicechoice=request._servicechoice
 
-        if work.request.invoke!=None:
+        if work.request.invoke!=None: ## this is a reply.
             p.invoke=work.request.invoke
         else:
             self.invoke=(self.invoke+1)%256 ## Increment counter
@@ -61,8 +67,11 @@ class MessageHandler:
                         self.invoke=i
                         break
                 assert self.invoke!=None ## could not find empty slot
-            p.invoke=self.invoke
-            self.wait[p.invoke]=work.tid
+            work.request.invoke=p.invoke=self.invoke
+            self.wait[p.invoke]=(work.tid,work)
+
+            if timeout: ## timeout requested, no timeout on reply (invoke set) messages
+                self.timeout[p.invoke]=self.time+timeout
 
         if debug: print "MessageHandler.put>", remote, p.invoke
         self.send.append((remote,p._encode(request)))
@@ -73,8 +82,19 @@ class MessageHandler:
     def reading(self):
         return True
     
-    def ready(self):
-        return False
+    def ready(self,time):
+        self.time=time
+        if time-self.sleep<0:
+            return False
+        self.sleep=time+self.TIMEOUT
+        return True
+    
+    def process(self):
+        for invoke,timeout in self.timeout.items():
+            if self.time-timeout > 0:
+                tid,work=self.wait[invoke]
+                print "MessageHandler.process>", invoke, tid, self.time-timeout, work.request
+                self.put(work) ## resend
     
     def write(self):
         remote,data=self.send.pop(0)
@@ -96,16 +116,20 @@ class MessageHandler:
         p=packet.PDU[p.pdutype](data=recv)
         message=None
         tid=None
+        work=None
         ## Response messages.
         if(p.pdutype==0x3): ## ComplexACK
             message=bacnet.ConfirmedServiceResponseChoice[p.servicechoice](data=p)
-            tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
+            tid,work=self.wait.pop(p.invoke) ## remove pending message from wait queue
+            self.timeout.pop(p.invoke,None)  ## remove timeout
         elif p.pdutype==0x2: ## SimpleACK
             message=bacnet.Boolean(True)
-            tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
+            tid,work=self.wait.pop(p.invoke) ## remove pending message from wait queue
+            self.timeout.pop(p.invoke,None)  ## remove timeout
         elif p.pdutype==0x5: ## Error
             message=bacnet.Error(data=p) ## service choice is ignored since most are "Error"
-            tid=self.wait.pop(p.invoke) ## remove pending message from wait queue
+            tid,work=self.wait.pop(p.invoke) ## remove pending message from wait queue
+            self.timeout.pop(p.invoke,None)  ## remove timeout
         ## Request messages
         else: ## Unconfirmed and Confirmed Request
             service=bacnet.ServiceChoice[p.pdutype].get(p.servicechoice,None)
@@ -127,8 +151,8 @@ class MessageHandler:
         if not message:
             print "MessageHandler.get> Unknown packet", binascii.b2a_hex(recv)
             return False        
-
-        work=scheduler.Work(tid)
+        
+        work=work or scheduler.Work(tid)
         work.response=Message(remote,message,getattr(p,'invoke',None))
         return work
     

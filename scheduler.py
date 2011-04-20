@@ -40,7 +40,6 @@ class Scheduler:
             if self.done: 
                 block=0
             while True:
-                
                 ## fd queue
                 r,w,x=[],[],[]
                 for h in self.handler:
@@ -51,20 +50,18 @@ class Scheduler:
                 (sr,sw,sx) = select.select(r,w,x,block)
                 assert not sx
                 if trace: print "Scheduler.run> select", sr,sw,sx
+
+                now=time.time() ## cache time
                 
                 ## Sockets are in "ready" state and will "process"
                 ready=[]
                 for h in self.handler:
-                    h.ready() and ready.append(h)
+                    h.ready(now) and ready.append(h)
                 
                 ## Command queue
-                next,cmd=[],[]
+                cmd=[]
                 for c in self.cmd:
-                    if c.request.done():
-                        cmd.append(c)
-                    else:
-                        next.append(c)
-                self.cmd=next
+                    c.request.ready(now) and cmd.append(c)
 
                 ## scheduler is empty.
                 if (not sr) and (not sw) and (not sx) and (not cmd) and (not ready):
@@ -97,6 +94,7 @@ class Scheduler:
                     if trace: print "Scheduler.run> cmd"
                     c.response=c.request.get()
                     self.done.append(c)
+                    self.cmd.remove(c)
             
             ## Pair responses
             for h in self.handler:
@@ -112,15 +110,15 @@ class Scheduler:
                     work=self.done.pop(0)
                     if debug: print "Scheduler.run> done", work
                     task=self.task[work.tid]
-                    send=task.send(work.response) ## coroutine yield
-                    if send:
-                        if debug: print "Scheduler.run> work", send
-                        send._handler.put(Work(work.tid,send))
+                    sent=task.send(work.response) ## coroutine yield
+                    if sent:
+                        if debug: print "Scheduler.run> work", sent
+                        sent._handler.put(Work(work.tid,sent))
                 except StopIteration:
                     if debug: print "Scheduler.run> %d exited" % work.tid
                     del self.task[work.tid]
                     continue
-
+                
         if debug: print "Scheduler.run> done", self.work, self.done
         assert not self.work and not self.done
         
@@ -141,6 +139,9 @@ class Task:
         
     def send(self):
         assert False ## send should point to coroutine send()
+        
+    def __repr__(self):
+        return "Task[%s]:%d" % (self.__class__,self.tid)
 
 class Work:
     """
@@ -166,8 +167,8 @@ class Wait:
         self.sleep=sleep
         self.start=time.time()
         
-    def done(self):
-        if time.time() > self.start+self.sleep:
+    def ready(self,time):
+        if time > self.start+self.sleep:
             if debug: print "Wait.done>", self.start
             return True
         return False

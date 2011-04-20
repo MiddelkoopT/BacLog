@@ -17,8 +17,9 @@ import postgres as database
 from scheduler import Task
 from message import Message
 
+info=True
 debug=True
-trace=False
+trace=True
 
 class Ping(Task):
     def run(self):
@@ -66,7 +67,7 @@ class FindObjects(Task):
                        ]
 
         for target in self.devices:
-            if debug: print "FindObjects> ** device start:", target
+            if info: print "FindObjects> ** device start:", target
             response=yield Message(target.address,bacnet.ReadProperty('objectName','device',target.device))
             name=response.message.value._value
             response=yield database.Device(target.IP,target.port,target.device,name)
@@ -115,12 +116,16 @@ class COVNotification(Task):
 class BacLog:
     def __init__(self):
         ## Configure
-        global config
+        global config,debug,trace
         config=configparser.ConfigParser()
         config.read(('baclog.ini','local.ini'))
         bind=config.get('Network','bind')
         port=config.getint('Network','port')
         print "BacLog.run> init:", (bind, port)
+
+        if config.getboolean('Options','quiet'):
+            debug=False
+            trace=False
         
         ## I/O scheduler and drivers
         self.scheduler=scheduler.init()

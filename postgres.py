@@ -88,7 +88,7 @@ class DatabaseHandler:
     def writing(self):
         return self.conn.poll()==self.POLL_WRITE
     
-    def ready(self):
+    def ready(self,time):
         if self.state==self.IDLE:
             return False
         return self.conn.poll()==self.POLL_OK

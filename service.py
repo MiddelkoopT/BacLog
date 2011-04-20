@@ -85,5 +85,5 @@ class WhoIs(Task):
             iam.segmentation=bacnet.Segmented.noSegmentation #@UndefinedVariable
             iam.vendor=65535
             print "WhoIs>", iam
-            whois=yield Message(whois.remote,iam)
+            whois=yield Message(whois.remote,iam,timeout=None)
 
