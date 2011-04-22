@@ -1,0 +1,40 @@
+## Python/Postgres
+sudo easy_install psycopg2
+
+## BacLog SVN
+install -dv BacLog
+cd BacLog
+git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/projects/svn/BacLog
+git svn fetch
+
+git branch -r
+git checkout -b testing svn/mtim-baclog-pughhall-v1
+
+## R/Eclipse/
+apt-get install r-cran-rjava
+wget -c http://download.walware.de/rj/rj_0.5.2-1.tar.gz
+sudo R CMD INSTALL --no-test-load rj_*.tar.gz
+
+## R/Postgres/ODBC
+sudo apt-get install r-cran-dbi odbc-postgresql odbcinst
+sudo odbcinst -i -d -f /usr/share/psqlodbc/odbcinst.ini.template
+psql -c "ALTER USER mtim WITH PASSWORD 'orange'"
+cat <<EOF >> ~/.odbc.ini
+[PostgreSQL]
+Description         = PostgreSQL 
+Driver              = PostgreSQL Unicode
+Trace               = No
+TraceFile           = psqlodbc.log
+Database            = mtim
+Servername          = localhost
+UserName            = mtim
+Password            = orange
+Port                = 5432
+ReadOnly            = No
+RowVersioning       = No
+ShowSystemTables    = No
+ShowOidColumn       = No
+FakeOidIndex        = No
+ConnSettings        =
+
+EOF

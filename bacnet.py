@@ -102,11 +102,20 @@ class ErrorACK(Sequence):
 
 class ErrorClass(Enumerated):
     _enumeration={
+                  'device':0,
+                  'object':1,
                   'property':2,
                   }
     
 class ErrorCode(Enumerated):
     _enumeration={
+                  'other':0,
+                  'configurationInProgress':2,
+                  'deviceBusy':3,
+                  'timeout':30,
+                  'unknownObject':31,
+                  'unknownProperty':32,
+                  'valueOutOfRange':37,
                   'invalidArrayIndex':42,
                   }
 

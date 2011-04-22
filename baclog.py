@@ -5,6 +5,7 @@ import ConfigParser as configparser
 config=None
 
 import bacnet
+import tagged
 import scheduler
 import message
 import service
@@ -19,7 +20,7 @@ from message import Message
 
 info=True
 debug=True
-trace=True
+trace=False
 
 class Ping(Task):
     def run(self):
@@ -35,7 +36,8 @@ class GetPresentValue(Task):
             response=yield Message(self.target.address,request)
             m=response.message
             if debug: print "GetPresentValue> value:", m.value.value
-            response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.value.value)
+            response=yield database.Log(response.remote[0],response.remote[1],
+                                        m.object.type,m.object.instance,m.value.value)
 
 
 class SubscribeCOV(Task):
@@ -43,13 +45,20 @@ class SubscribeCOV(Task):
         while True:
             if debug: print "SubscribeCOV> ** device subscribe:", self.target
             for o in self.target.objects:
+                if debug: print "SubscribeCOV>", o, self.target
                 subscribe=bacnet.SubscribeCOV()
                 subscribe.pid=self.pid
                 subscribe.object=o.objectIdentifier
                 subscribe.confirmed=False
                 subscribe.lifetime=self.lifetime
-                ack=yield Message(self.target.address, subscribe)
-                if trace: print "FindObjects> Subscribe ACK", ack
+                for i in range(0,10):
+                    ack=yield Message(self.target.address, subscribe)
+                    if debug: print "SubscribeCOV> Subscribe ACK", ack
+                    if isinstance(ack.message, tagged.Boolean) and ack.message._value==True:
+                        break
+                    print "SubscribeCOV> Subscribe Error", i, o, ack
+                    yield scheduler.Wait(10.0)
+                    
             yield scheduler.Wait(int(self.lifetime*0.90))
 
 
@@ -62,13 +71,16 @@ class FindObjects(Task):
         ioObjectTypes=[
                        bacnet.ObjectType.analogInput,  #@UndefinedVariable
                        bacnet.ObjectType.analogOutput, #@UndefinedVariable
-                       bacnet.ObjectType.binaryOutput, #@UndefinedVariable
+                       #bacnet.ObjectType.analogValue,  #@UndefinedVariable
                        bacnet.ObjectType.binaryInput,  #@UndefinedVariable
+                       bacnet.ObjectType.binaryOutput, #@UndefinedVariable
+                       #bacnet.ObjectType.binaryValue,  #@UndefinedVariable
                        ]
 
         for target in self.devices:
             if info: print "FindObjects> ** device start:", target
-            response=yield Message(target.address,bacnet.ReadProperty('objectName','device',target.device))
+            message=bacnet.ReadProperty('objectName','device',target.device)
+            response=yield Message(target.address,message)
             name=response.message.value._value
             response=yield database.Device(target.IP,target.port,target.device,name)
             deviceID,=response.pop()
@@ -93,9 +105,9 @@ class FindObjects(Task):
                 response=yield Message(target.address,bacnet.ReadProperty('description',o))
                 description=response.message.value.value
                 if debug: print "FindObjects> name:", name, description
-                response=yield database.Object(deviceID,None,o.instance,o.objectType,name,description)
+                response=yield database.Object(deviceID,o.objectType,o.instance,name,description)
                 objectID,=response.pop()
-                target.objects.append(object.Object(objectID,o.instance,o.objectType,name))
+                target.objects.append(object.Object(objectID,o.objectType,o.instance,name))
                 
             if debug: print "FindObjects> ** device end:",target.device
 
@@ -108,7 +120,7 @@ class COVNotification(Task):
                 continue
             m=response.message
             if trace: print "COVNotification>", m.object, m.values.presentValue.value._value.value
-            response=yield database.Log(response.remote[0],response.remote[1],m.object.instance,m.values.presentValue.value._value.value)
+            response=yield database.Log(response.remote[0],response.remote[1],m.object.objectType,m.object.instance,m.values.presentValue.value._value.value)
 
 
 #### Main Class

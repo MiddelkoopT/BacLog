@@ -14,7 +14,7 @@ trace=False
 
 class Message:
     _handler=None
-    def __init__(self,remote,message=None,invoke=None,timeout=0.5):
+    def __init__(self,remote,message=None,invoke=None,timeout=10.0):
         self.remote=remote
         self.message=message
         self.invoke=invoke
@@ -55,7 +55,7 @@ class MessageHandler:
         p=packet.PDU[request._pdutype]()
         p.servicechoice=request._servicechoice
 
-        if work.request.invoke!=None: ## this is a reply.
+        if work.request.invoke!=None: ## this is a reply/resend.
             p.invoke=work.request.invoke
         else:
             self.invoke=(self.invoke+1)%256 ## Increment counter
@@ -93,7 +93,8 @@ class MessageHandler:
         for invoke,timeout in self.timeout.items():
             if self.time-timeout > 0:
                 tid,work=self.wait[invoke]
-                print "MessageHandler.process>", invoke, tid, self.time-timeout, work.request
+                print "MessageHandler.process> timeout:", invoke, tid, work.request
+                self.timeout[invoke]=self.time+work.request.timeout
                 self.put(work) ## resend
     
     def write(self):

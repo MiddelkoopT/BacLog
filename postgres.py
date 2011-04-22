@@ -148,7 +148,7 @@ class GetDevices(Task):
             self.devices.append(device)
         if debug: print "postgres.GetDevices>", self.devices
         for d in self.devices:
-            query=Query("SELECT objectID,instance,type,name FROM Objects WHERE deviceID=%s" % (d.id))
+            query=Query("SELECT objectID,type,instance,name FROM Objects WHERE deviceID=%s" % (d.id))
             response=yield query
             for o in response:
                 d.objects.append(object.Object(*o))
@@ -157,16 +157,16 @@ class GetDevices(Task):
 ## Insert Queries (basic)
 
 class Log(Query):
-    def __init__(self,IP,port,instance,value,status=None,objectID=None):
-        query="INSERT INTO Log (time,IP,port,instance,value,status,objectID) VALUES (%s,%s,%s,%s,%s,%s,%s);"
+    def __init__(self,IP,port,type,instance,value,status=None,objectID=None):
+        query="INSERT INTO Log (time,IP,port,type,instance,value,status,objectID) VALUES (%s,%s,%s,%s,%s,%s,%s,%s);"
         now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query, now,IP,port,instance,value,status,objectID)
+        Query.__init__(self,query, now,IP,port,type,instance,value,status,objectID)
 
 class Object(Query):
-    def __init__(self,deviceID,pointID,instance,type,name,description=None):
-        query="INSERT INTO Objects (first,deviceID,pointID,instance,type,name,description) VALUES (%s,%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
+    def __init__(self,deviceID,type,instance,name,description=None,pointID=None):
+        query="INSERT INTO Objects (first,deviceID,type,instance,name,description,pointID) VALUES (%s,%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
         now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query, now,deviceID,pointID,instance,type,name,description)
+        Query.__init__(self,query, now,deviceID,type,instance,name,description,pointID)
 
 class Device(Query):
     def __init__(self,IP,port,device,name):

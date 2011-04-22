@@ -2,7 +2,7 @@
 ### Random development notes
 
 ## SQL
-SELECT Log.time,Devices.device,Devices.name,Objects.type,Objects.instance,Log.value,Objects.name,Objects.description FROM Log JOIN Devices USING (IP) JOIN Objects USING (deviceID,instance);
+SELECT Log.time,Devices.device,Devices.name,Objects.type,Objects.instance,Log.value,Objects.name,Objects.description FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,instance);
 
 select * FROM Log WHERE age(NOW(),time) < interval '00:00:10';
 while sleep 1; do psql baclog --tuples-only -c "select * FROM Log WHERE age(NOW(),time) < interval '00:00:01';" ; done
@@ -20,3 +20,9 @@ wireshark -k -i <( ssh baclog.ad.ufl.edu /usr/sbin/tcpdump -i eth0 -s 0 -w - por
 Field Panel/FLN/Drop/Point
 9001/0/0/1
 Enable Point
+Hardware Fieldpanels Makeready
+
+Test program.
+     100   WAIT(5,P20,P20,10)
+     110   WAIT(5,P20,P20,1)
+Enable program, disable point.

@@ -50,8 +50,9 @@ CREATE TABLE Log (
 	time timestamp, 			-- time measurement occured.
 	IP inet, 					-- remote IP
 	port integer, 				-- remote port
+	objectID integer, 			-- objectID
+	type integer,				-- remote object type
 	instance integer,	 		-- remote object instance
-	objectID integer, 			-- objectID (post processed)
 	status integer, 			-- what happened COV/ERROR etc.
 	value real 					-- recorded value
 );
