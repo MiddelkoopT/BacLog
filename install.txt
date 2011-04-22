@@ -11,7 +11,7 @@ git branch -r
 git checkout -b testing svn/mtim-baclog-pughhall-v1
 
 ## R/Eclipse/
-apt-get install r-cran-rjava
+sudo apt-get install r-cran-rjava
 wget -c http://download.walware.de/rj/rj_0.5.2-1.tar.gz
 sudo R CMD INSTALL --no-test-load rj_*.tar.gz
 
