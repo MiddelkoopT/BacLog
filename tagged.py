@@ -270,9 +270,9 @@ class ObjectIdentifier(Tagged):
         num,cls,length=self._getTag() #@UnusedVariable
         assert length==4
         object,=struct.unpack('!L',data._get(length))
-        self.objectType=int((object&0xFFC00000)>>22)
+        self.type=int((object&0xFFC00000)>>22)
         self.instance=      (object&0x003FFFFF)
-        self._value=(self.objectType,self.instance)
+        self._value=(self.type,self.instance)
         #print "ObjectIdentifier.decode> %08x" % object , self._value
         
     def _encode(self,tagnum=None):
@@ -280,16 +280,16 @@ class ObjectIdentifier(Tagged):
             tag=self._setTag(self._num,0,4)
         else:
             tag=self._setTag(tagnum,1,4)
-        return tag+struct.pack('!I',self.objectType << 22 | self.instance)
+        return tag+struct.pack('!I',self.type << 22 | self.instance)
 
-    def _set(self,objectType,instance):
-        if type(objectType) in types.StringTypes:
-            objectType=bacnet.ObjectType._enumeration[objectType]
-        self.objectType=objectType
-        self.instance=instance
+    def _set(self,_type,_instance):
+        if type(_type) in types.StringTypes:
+            _type=bacnet.ObjectType._enumeration[_type]
+        self.type=_type
+        self.instance=_instance
         
     def __repr__(self):
-        return "<%s,%d>" % (bacnet.ObjectType._display[self.objectType],self.instance)
+        return "<%s,%d>" % (bacnet.ObjectType._display[self.type],self.instance)
 
 ## Application brings data in without context through property.
 ##  * Property should (through the use of current object) 

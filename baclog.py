@@ -95,7 +95,7 @@ class FindObjects(Task):
                     break
                 o=property.message.value[0] ## Object
                 if debug: print "FindObjects>", o
-                if o.objectType in ioObjectTypes:
+                if o.type in ioObjectTypes:
                     objects.append(o)
 
             if debug: print "FindObjects> ** device objects:",target.device
@@ -105,9 +105,9 @@ class FindObjects(Task):
                 response=yield Message(target.address,bacnet.ReadProperty('description',o))
                 description=response.message.value.value
                 if debug: print "FindObjects> name:", name, description
-                response=yield database.Object(deviceID,o.objectType,o.instance,name,description)
+                response=yield database.Object(deviceID,o.type,o.instance,name,description)
                 objectID,=response.pop()
-                target.objects.append(object.Object(objectID,o.objectType,o.instance,name))
+                target.objects.append(object.Object(objectID,o.type,o.instance,name))
                 
             if debug: print "FindObjects> ** device end:",target.device
 
@@ -120,7 +120,7 @@ class COVNotification(Task):
                 continue
             m=response.message
             if trace: print "COVNotification>", m.object, m.values.presentValue.value._value.value
-            response=yield database.Log(response.remote[0],response.remote[1],m.object.objectType,m.object.instance,m.values.presentValue.value._value.value)
+            response=yield database.Log(response.remote[0],response.remote[1],m.object.type,m.object.instance,m.values.presentValue.value._value.value)
 
 
 #### Main Class
