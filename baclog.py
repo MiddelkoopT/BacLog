@@ -57,9 +57,9 @@ class SubscribeCOV(Task):
                     if isinstance(ack.message, tagged.Boolean) and ack.message._value==True:
                         break
                     print "SubscribeCOV> Subscribe Error", i, o, ack
-                    yield scheduler.Wait(10.0)
+                    yield scheduler.Wait(i*6+1)
                     
-            yield scheduler.Wait(int(self.lifetime*0.90))
+            yield scheduler.Wait(int(self.lifetime*0.75))
 
 
 class FindObjects(Task):
