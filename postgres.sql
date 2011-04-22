@@ -35,8 +35,8 @@ CREATE TABLE Objects (
 	objectID SERIAL, 					-- object ID - object definition (temporal)
 	deviceID integer, 					-- device ID - device definition (temporal)
 	pointID integer, 					-- point ID - physical point definition
-	instance integer, 					-- BACnet objectInstance
 	type integer, 						-- BACnet objectType
+	instance integer, 					-- BACnet objectInstance
 	name varchar,		      			-- BACnet objectName
 	description varchar,				-- BACnet description
 	first timestamp with time zone, 	-- first time seen, valid until last
