@@ -7,16 +7,35 @@ library('RODBC');
 c <- odbcConnect('PostgreSQL');
 
 ## Meta information
-d <- sqlQuery(c,'SELECT device,name	FROM Devices;');
-o <- sqlQuery(c,"SELECT device,instance,type,objects.name FROM Objects JOIN Devices USING (deviceID) WHERE objects.name like '%TEMP%';")
+d <- 
+  	sqlQuery(c,'SELECT device,name	FROM Devices;');
+o <- 
+ 	sqlQuery(c,"SELECT device,instance,type,objects.name,objects.description
+ 	FROM Objects JOIN Devices USING (deviceID) 
+	-- WHERE objects.name LIKE '%ROOM TEMP%'")
+
+tn <- sqlQuery(c,'SELECT MIN(time) FROM LOG;');
+tm <- sqlQuery(c,'SELECT MAX(time) FROM LOG;');
+c(tn,tm)
 
 ## Graph point
 s <- sqlQuery(c,"SELECT time,value FROM Log JOIN Devices USING (IP,port) WHERE
-	time> 
-	device=9041 AND type=0 AND instance=15
-	LIMIT 10")
-xyplot(value~time,s,type='l')
+    time > TIMESTAMP '2011-04-29 09:00-04' AND
+    time < TIMESTAMP '2011-04-30 15:00-04' AND
+	device=9040 AND type=1 AND instance=12478
+	ORDER BY time;")
+xyplot(value~time,s,type='o',col='blue')
 
+## Graph multiple points
+s2 <- sqlQuery(c,"SELECT time,value,instance FROM Log JOIN Devices USING (IP,port) WHERE
+--				time > TIMESTAMP '2011-04-29 09:00-04' AND
+--				time < TIMESTAMP '2011-04-29 15:00-04' AND
+				(
+				    (device=9040 AND type=0 AND instance=12404) 
+				 OR (device=9040 AND type=1 AND instance=12478)
+				)
+				ORDER BY time;")
+xyplot(value~time,s2,group=instance,type='o')
 
 ## Dump database
 l <- sqlQuery(c,'

@@ -1,15 +1,16 @@
 -- BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 -- Analysis queries.
 
-
+-- Metadata
 SELECT * FROM Devices;
 SELECT * FROM Objects JOIN Devices USING (deviceID);
 
+-- Dump database
 SELECT 
 	Log.time,Devices.device,Devices.name,
     Objects.type,Objects.instance,Log.value,Objects.name,Objects.description
 FROM 
-    Log JOIN Devices USING (IP) JOIN Objects USING (deviceID,type,instance);
+    Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance);
 
 -- Shows active data points
 SELECT
@@ -19,6 +20,13 @@ FROM
 	Log
 	JOIN Devices USING (IP,port)
 	JOIN Objects USING (deviceID,instance,type)
+WHERE
+	objects.name LIKE '%241%'
 GROUP BY
 	device,type,instance,objects.name,objects.description
 ORDER BY count DESC
+
+-- Find Data
+SELECT Objects.name,value 
+FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance) 
+WHERE device=9040 AND type=4 AND instance=12414

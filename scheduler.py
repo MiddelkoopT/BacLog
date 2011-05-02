@@ -40,36 +40,42 @@ class Scheduler:
             if self.done: 
                 block=0
             while True:
-                ## fd queue
+                ## Load fd queues
                 r,w,x=[],[],[]
                 for h in self.handler:
                     h.reading() and r.append(h.socket)
                     h.writing() and w.append(h.socket)
                     x.append(h.socket)
-                if trace: print "Scheduler.run> select",r,w,x,block
-                (sr,sw,sx) = select.select(r,w,x,block)
-                assert not sx
-                if trace: print "Scheduler.run> select", sr,sw,sx
 
-                now=time.time() ## cache time
-                
-                ## Sockets are in "ready" state and will "process"
+                ## cache time
+                now=time.time() 
+                    
+                ## Handlers that are ready to process immediately
                 ready=[]
                 for h in self.handler:
-                    h.ready(now) and ready.append(h)
-                
-                ## Command queue
+                    if h.ready(now):
+                        ready.append(h)
+                        block=0
+
+                ## Commands that are ready to process immediately
                 cmd=[]
                 for c in self.cmd:
-                    c.request.ready(now) and cmd.append(c)
+                    if c.request.ready(now):
+                        cmd.append(c)
+                        block=0
 
+                if trace: print "Scheduler.run> select",r,w,x,block
+                (sr,sw,sx) = select.select(r,w,x,block)
+                now=time.time() ## cache time
+                if trace: print "Scheduler.run> select", sr,sw,sx
+                assert not sx
+                                
                 ## scheduler is empty.
                 if (not sr) and (not sw) and (not sx) and (not cmd) and (not ready):
                     if trace: print "Scheduler.run> empty"
                     break
                 
-                ## Process Data
-
+                ## Process Data 
                 block=0 ## Data exists do not block
 
                 ## Recv

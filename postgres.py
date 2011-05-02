@@ -73,7 +73,7 @@ class DatabaseHandler:
         
     def put(self,work):
         if debug: print "DatabaseHandler.put>", len(self.send), work.tid, work.request.query
-        if len(self.send)>8: print "DatabaseHandler.process> queue", len(self.send)
+        if len(self.send)>8: print "DatabaseHandler.put> queue", len(self.send)
         if self.state==DatabaseHandler.IDLE: ## handler idle so start work immediately
             ## duplicate code from state machine
             self.work=work

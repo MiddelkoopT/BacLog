@@ -84,6 +84,8 @@ class MessageHandler:
     
     def ready(self,time):
         self.time=time
+        if not self.timeout:
+            return False
         if time-self.sleep<0:
             return False
         self.sleep=time+self.TIMEOUT
