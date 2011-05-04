@@ -39,6 +39,8 @@ class Scheduler:
             block=self.SLEEP ## start off with blocking.
             if self.done: 
                 block=0
+            now=time.time()
+            next=now+self.SLEEP
             while True:
                 ## Load fd queues
                 r,w,x=[],[],[]
@@ -47,9 +49,6 @@ class Scheduler:
                     h.writing() and w.append(h.socket)
                     x.append(h.socket)
 
-                ## cache time
-                now=time.time() 
-                    
                 ## Handlers that are ready to process immediately
                 ready=[]
                 for h in self.handler:
@@ -66,7 +65,6 @@ class Scheduler:
 
                 if trace: print "Scheduler.run> select",r,w,x,block
                 (sr,sw,sx) = select.select(r,w,x,block)
-                now=time.time() ## cache time
                 if trace: print "Scheduler.run> select", sr,sw,sx
                 assert not sx
                                 
@@ -101,6 +99,12 @@ class Scheduler:
                     c.response=c.request.get()
                     self.done.append(c)
                     self.cmd.remove(c)
+                    
+                ## Process data periodically (now used in top of loop).
+                now=time.time() 
+                if now>next:
+                    print "Scheduler.run> next",now
+                    break 
             
             ## Pair responses
             for h in self.handler:

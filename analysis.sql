@@ -1,14 +1,17 @@
 -- BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 -- Analysis queries.
 
+-- psql -A -F, -c "
+
 -- Metadata
 SELECT * FROM Devices;
 SELECT * FROM Objects JOIN Devices USING (deviceID);
 
 -- Dump database
 SELECT 
-	Log.time,Devices.device,Devices.name,
-    Objects.type,Objects.instance,Log.value,Objects.name,Objects.description
+	Log.time,Devices.device, -- Devices.name,
+    Objects.type,Objects.instance,Objects.name, -- Objects.description,
+    Log.value
 FROM 
     Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance);
 
@@ -27,6 +30,6 @@ GROUP BY
 ORDER BY count DESC
 
 -- Find Data
-SELECT Objects.name,value 
+SELECT value 
 FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance) 
-WHERE device=9040 AND type=4 AND instance=12414
+WHERE device=9040 AND type=0 AND instance=3

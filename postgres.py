@@ -104,19 +104,29 @@ class DatabaseHandler:
             self.work=self.send.pop()
             self.work.request.execute()
             self.state=DatabaseHandler.EXECUTE
+            if self.conn.poll()!=self.POLL_OK:
+                return
+
         if self.state==DatabaseHandler.EXECUTE:
             self.work.response=self.work.request.fetch()
             self.state=DatabaseHandler.FETCH
-        elif self.state==DatabaseHandler.FETCH:
+            if self.conn.poll()!=self.POLL_OK:
+                return
+
+        if self.state==DatabaseHandler.FETCH:
             self.work.request.close()
             self.work.request=None
             self.state=DatabaseHandler.CLOSE
-        elif self.state==DatabaseHandler.CLOSE:
+            if self.conn.poll()!=self.POLL_OK:
+                return
+
+        if self.state==DatabaseHandler.CLOSE:
             self.recv.append(self.work) ## Data now available.
             self.work=None ## Idle
-            self.state=DatabaseHandler.IDLE
             if self.send: ## more data to process
                 self.state=DatabaseHandler.WAIT
+            else:
+                self.state=DatabaseHandler.IDLE
         
     ## Socket must be in "ready" state before processing (idle)
     def read(self):
