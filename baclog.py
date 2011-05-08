@@ -185,6 +185,7 @@ class BacLog:
             return
 
         ## Configure Device
+        print "BacLog.run> configure"
 
         property=service.ReadProperty()
         property.device=device
@@ -217,6 +218,7 @@ class BacLog:
                 scheduler.add(cov)
 
         ## Run scheduler.
+        print "BacLog.run> run"
         scheduler.run()
         
         ## Terminate

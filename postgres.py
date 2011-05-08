@@ -45,7 +45,7 @@ class DatabaseHandler:
     POLL_READ=psycopg2.extensions.POLL_READ     # 1
     POLL_WRITE=psycopg2.extensions.POLL_WRITE   # 2
     POLL_ERROR=psycopg2.extensions.POLL_ERROR   # 3
-    IDLE,WAIT,EXECUTE,FETCH,CLOSE = range(5)
+    IDLE,WAIT,EXECUTE,FETCH,CLOSE,COMMIT = range(6)
     
     def __init__(self,database='baclog'):
         if trace: print "DatabaseHandler>", database
@@ -57,6 +57,7 @@ class DatabaseHandler:
         ## Database
         self.conn=psycopg2.connect(database=database,async=1)
         psycopg2.extras.wait_select(self.conn) ## Block; connections are expensive anyways.
+        self.cur=self.conn.cursor() ## Private handler cursor
         self.socket=self.conn.fileno()
 
         ## Internal state
@@ -73,14 +74,14 @@ class DatabaseHandler:
         
     def put(self,work):
         if debug: print "DatabaseHandler.put>", len(self.send), work.tid, work.request.query
-        if self.send and len(self.send)%10==0: print "DatabaseHandler.put> queue", len(self.send)
-        if self.state==DatabaseHandler.IDLE: ## handler idle so start work immediately
-            ## duplicate code from state machine
-            self.work=work
-            work.request.execute()
-            self.state=DatabaseHandler.EXECUTE
-        else:
-            self.send.append(work)
+        if self.send and len(self.send)%50==0: print "DatabaseHandler.put> queue", len(self.send)
+        
+        ## Idle handler: start transaction
+        if self.state==DatabaseHandler.IDLE: 
+            self.cur.execute("BEGIN")
+            self.state=DatabaseHandler.WAIT
+        
+        self.send.append(work)
 
     def reading(self):
         return self.conn.poll()==self.POLL_READ
@@ -121,12 +122,20 @@ class DatabaseHandler:
                 return
 
         if self.state==DatabaseHandler.CLOSE:
+            self.state=DatabaseHandler.COMMIT
+            if not self.send: ## not empty so keep transaction open
+                if trace: print "DatabaseHandler.process> commit"
+                self.cur.execute("COMMIT");
+                if self.conn.poll()!=self.POLL_OK:
+                    return
+        
+        if self.state==DatabaseHandler.COMMIT:
             self.recv.append(self.work) ## Data now available.
             self.work=None ## Idle
             if self.send: ## more data to process
                 self.state=DatabaseHandler.WAIT
-            else:
-                self.state=DatabaseHandler.IDLE
+                return
+            self.state=DatabaseHandler.IDLE
         
     ## Socket must be in "ready" state before processing (idle)
     def read(self):
@@ -135,7 +144,7 @@ class DatabaseHandler:
         pass
         
     def get(self):
-        if len(self.recv)>1: print "DatabaseHandler.get> queue", len(self.send)
+        if len(self.recv)>1: print "DatabaseHandler.get> queue", len(self.recv)
         if self.recv:
             work=self.recv.pop()
             if debug: print "DatabaseHandler.get>", len(self.recv), work.tid, work.response
@@ -143,6 +152,7 @@ class DatabaseHandler:
         return None
     
     def shutdown(self):
+        self.cur.close()
         self.conn.close()
 
 ## Database Tasks
