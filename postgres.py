@@ -73,7 +73,7 @@ class DatabaseHandler:
         
     def put(self,work):
         if debug: print "DatabaseHandler.put>", len(self.send), work.tid, work.request.query
-        if len(self.send)>8: print "DatabaseHandler.put> queue", len(self.send)
+        if self.send and len(self.send)%10==0: print "DatabaseHandler.put> queue", len(self.send)
         if self.state==DatabaseHandler.IDLE: ## handler idle so start work immediately
             ## duplicate code from state machine
             self.work=work
@@ -167,10 +167,10 @@ class GetDevices(Task):
 ## Insert Queries (basic)
 
 class Log(Query):
-    def __init__(self,IP,port,type,instance,value,status=None,objectID=None):
+    def __init__(self,stamp,IP,port,type,instance,value,status=None,objectID=None):
         query="INSERT INTO Log (time,IP,port,type,instance,value,status,objectID) VALUES (%s,%s,%s,%s,%s,%s,%s,%s);"
-        now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query, now,IP,port,type,instance,value,status,objectID)
+        stamp=psycopg2.TimestampFromTicks(stamp)
+        Query.__init__(self,query, stamp,IP,port,type,instance,value,status,objectID)
 
 class Object(Query):
     def __init__(self,deviceID,type,instance,name,description=None,pointID=None):

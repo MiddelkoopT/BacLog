@@ -120,7 +120,7 @@ class COVNotification(Task):
                 continue
             m=response.message
             if debug: print "COVNotification>", m.object, m.values.presentValue.value._value.value
-            response=yield database.Log(response.remote[0],response.remote[1],m.object.type,m.object.instance,m.values.presentValue.value._value.value)
+            response=yield database.Log(response.stamp,response.remote[0],response.remote[1],m.object.type,m.object.instance,m.values.presentValue.value._value.value)
 
 
 #### Main Class

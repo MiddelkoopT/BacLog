@@ -3,6 +3,7 @@
 
 import socket
 import binascii
+import time
 
 import packet
 import bacnet
@@ -14,11 +15,15 @@ trace=False
 
 class Message:
     _handler=None
-    def __init__(self,remote,message=None,invoke=None,timeout=10.0):
+    def __init__(self,remote,message=None,invoke=None,timeout=2.0):
         self.remote=remote
         self.message=message
         self.invoke=invoke
-        self.timeout=timeout
+        if invoke!=None: ## Reply messages do not timeout.
+            self.timeout=None
+        else:
+            self.timeout=timeout
+        self.stamp=None
 
     def __repr__(self):
         return "[[%s:%s]]" % (self.remote,self.message)
@@ -60,7 +65,7 @@ class MessageHandler:
         else:
             self.invoke=(self.invoke+1)%256 ## Increment counter
             if self.wait.has_key(self.invoke):
-                print "MessageHandler.put> invoke search", self.invoke, self.wait 
+                if debug: print "MessageHandler.put> invoke search", self.invoke, self.wait 
                 self.invoke=None
                 for i in range(0,256):
                     if not self.wait.has_key(i):
@@ -70,8 +75,8 @@ class MessageHandler:
             work.request.invoke=p.invoke=self.invoke
             self.wait[p.invoke]=(work.tid,work)
 
-            if timeout: ## timeout requested, no timeout on reply (invoke set) messages
-                self.timeout[p.invoke]=self.time+timeout
+        if timeout: ## timeout requested, no timeout on reply (invoke set) messages
+            self.timeout[p.invoke]=self.time+timeout
 
         if debug: print "MessageHandler.put>", remote, p.invoke
         self.send.append((remote,p._encode(request)))
@@ -96,7 +101,7 @@ class MessageHandler:
             if self.time-timeout > 0:
                 tid,work=self.wait[invoke]
                 print "MessageHandler.process> timeout:", invoke, tid, work.request
-                self.timeout[invoke]=self.time+work.request.timeout
+                del self.timeout[invoke]
                 self.put(work) ## resend
     
     def write(self):
@@ -107,14 +112,14 @@ class MessageHandler:
         
     def read(self):
         (recv,remote)=self.socket.recvfrom(1500)
-        self.recv.append((recv,remote))
+        self.recv.append((recv,remote,time.time()))
         if trace: print "MessageHandler.read>", remote
         
     def get(self):
-        recv,remote=self.recv.pop(0)
+        recv,remote,stamp=self.recv.pop(0)
         ## Process BVLC/NPDU and start of APDU
         p=packet.Packet(data=recv)
-        if trace: print "MessageHandler.get>", remote, p.pdutype, binascii.b2a_hex(recv)
+        if trace: print "MessageHandler.get>", stamp, remote, p.pdutype, binascii.b2a_hex(recv)
         ## Process PDU
         p=packet.PDU[p.pdutype](data=recv)
         message=None
@@ -157,6 +162,7 @@ class MessageHandler:
         
         work=work or scheduler.Work(tid)
         work.response=Message(remote,message,getattr(p,'invoke',None))
+        work.response.stamp=stamp
         return work
     
     def shutdown(self):
