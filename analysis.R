@@ -21,22 +21,33 @@ c(tn,tm)
 
 ## Graph point
 s <- sqlQuery(c,"SELECT time,value FROM Log JOIN Devices USING (IP,port) WHERE
-    time > TIMESTAMP '2011-04-29 09:00-04' AND
-    time < TIMESTAMP '2011-04-30 15:00-04' AND
-	device=9040 AND type=0 AND instance=3
+--	time > TIMESTAMP '2011-05-05 00:30-04' AND
+--	time < TIMESTAMP '2011-05-05 01:30-04' AND
+	device=9040 AND type=1 AND instance=12491
 	ORDER BY time;")
 xyplot(value~time,s,type='o')
 
+xyplot(pmax(0,diff(value))~time,s,type='l')
+
+pmax(0,diff(s$value))
+
+# extra
+xyplot(diff(value)~time,s[1000:1500,],scales=list(y=list(limit=c(0,300))),type='o')
+plot(diff(s[1000:5000,]$time),type='l')
+hist(diff(s$time),breaks=30)
+
+
 ## Graph multiple points
-s2 <- sqlQuery(c,"SELECT time,value,instance FROM Log JOIN Devices USING (IP,port) WHERE
+m <- sqlQuery(c,"SELECT time,value,instance FROM Log JOIN Devices USING (IP,port) WHERE
 --				time > TIMESTAMP '2011-04-29 09:00-04' AND
 --				time < TIMESTAMP '2011-04-29 15:00-04' AND
 				(
-				    (device=9040 AND type=0 AND instance=12404) 
-				 OR (device=9040 AND type=1 AND instance=12478)
+				    (device=9040 AND type=1 AND instance=12475) 
+				 OR (device=9040 AND type=1 AND instance=14875)
 				)
 				ORDER BY time;")
-xyplot(value~time,s2,group=instance,type='o')
+xyplot(value~time,m,group=instance,type='o')
+
 
 ## Dump database
 l <- sqlQuery(c,'

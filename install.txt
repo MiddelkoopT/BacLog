@@ -38,3 +38,15 @@ FakeOidIndex        = No
 ConnSettings        =
 
 EOF
+
+## Postgres performance (numbers are for 4G machine)
+
+# local /etc/sysctl.conf
+# sudo sysctl -p
+# local: 25% of memory
+kernel.shmmax=1100000000
+kernel.shmall=4194304
+
+# change /etc/postgresql/8.4/main/postgresql.conf
+shared_buffers = 1000MB       # local: 25% memory
+effective_cache_size = 2000MB # local: 50% memory
