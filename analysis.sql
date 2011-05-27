@@ -38,6 +38,13 @@ FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance
 WHERE objects.name LIKE '%VAV%' AND MOD(instance,100)=77
 ORDER BY objects.name
 
+-- Look at VAV
+SELECT DISTINCT instance, Objects.name, MIN(value), MAX(value), AVG(value), COUNT(value)
+FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance) 
+WHERE device=9040 AND instance>=12400 AND instance <=12499
+GROUP BY instance, Objects.name
+ORDER BY instance
+
 -- Multiple data points
 SELECT time,value,instance FROM Log JOIN Devices USING (IP,port) 
 WHERE

@@ -23,9 +23,19 @@ c(tn,tm)
 s <- sqlQuery(c,"SELECT time,value FROM Log JOIN Devices USING (IP,port) WHERE
 --	time > TIMESTAMP '2011-05-05 00:30-04' AND
 --	time < TIMESTAMP '2011-05-05 01:30-04' AND
-	device=9040 AND type=1 AND instance=12491
+	device=9040 AND instance=12415
 	ORDER BY time;")
 xyplot(value~time,s,type='o')
+
+
+max(diff(s$value[-1]) %% 131071)
+
+plot( 
+	(diff(s$value[-1]) %% 131071) / as.real(diff(s$time)[-length(s)]) *60 
+)
+
+
+
 
 xyplot(pmax(0,diff(value))~time,s,type='l')
 
@@ -57,4 +67,11 @@ SELECT
 FROM 
     Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance);
 ');
+
+
+####
+
+## Analysis of room 241/VAV129/O9040.124xx
+
+
 
