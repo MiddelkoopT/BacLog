@@ -57,3 +57,4 @@ CREATE TABLE Log (
 	value real 							-- recorded value
 );
 
+CREATE INDEX i_Log_time ON Log (time);

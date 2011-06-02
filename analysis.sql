@@ -15,6 +15,25 @@ SELECT
 FROM 
     Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,type,instance);
 
+-- Dump database into a intermedary table
+DROP TABLE IF EXISTS Data;
+SELECT 
+    time,device,type,instance,value 
+INTO Data
+FROM 
+    Log JOIN Devices USING(IP,port) JOIN Objects USING (deviceID,type,instance)
+WHERE
+    device=9040 AND instance/100=124
+ORDER BY time
+LIMIT 100000;
+
+CREATE INDEX i_Data_time ON Data (time);
+
+SELECT * FROM Data;
+
+------
+-- Analysis
+
 -- Shows active data points
 SELECT
 	COUNT(*) AS count,
