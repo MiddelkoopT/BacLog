@@ -266,7 +266,7 @@ class Analysis:
         print 'stream',stream
         
         cur=self.db.cursor()
-        cur.execute("SELECT time,device,type,instance,value FROM Data2 ORDER BY Time")
+        cur.execute("SELECT time,device,type,instance,value FROM Data ORDER BY Time")
         print cur.rowcount
         
         ## Preload.
@@ -275,6 +275,7 @@ class Analysis:
             if o not in stream:
                 continue
             stream.updateValue(o,value,time)
+            last=time
             done=True
             for o in stream:
                 if o.value is None:
@@ -287,44 +288,68 @@ class Analysis:
         ## Analysis loop.
         data={}
         ptime=data['time']=[]
-        pq=data['q']=[]
-        pt=data['t']=[]
-        pmcp=data['mcp']=[]
+        phour=data['hour']=[]
         
-        iqt=0.0
+        pt=data['t']=[]
+        pq=data['q']=[]
+        phin=data['hin']=[]
+        phroom=data['hroom']=[]
+        phout=data['hout']=[]
+        perror=data['error']=[]
+
+        ## Inital values
+        sa,f,mf,t=stream.values()
+        W=0.008 ## assume humidity ratio of 50% @ 71F
+        hroom=0.240*t+W*(1061+0.444*t)
+        
         for time,device,type,instance,value in cur:
             o=Object(device,type,instance)
             if o in stream:
-                previous,last=stream.updateValue(o,value,time)
-                ptime.append(mktime(time.timetuple())+time.microsecond/1000000.0)
-                sa,f,mf,t=stream.values()
-                q=mf*(f/100.0)*1.08*(sa-t)
-
-                # integrate qt
-                td=(time-last)
-                tdh=td.microseconds/1000000.0+td.seconds+td.days*(1440.0)
-                iqt+=q*tdh
-
-                if o.eq(9040,1,12478):
-                    mcp=iqt*(t-previous)
-                    iqt=0.0
+                stream.updateValue(o,value,time)
+                delta=deltaMin(time-last)
+                last=time
                 
-                pmcp.append(mcp)
-                pq.append(q)
+                ptime.append(mktime(time.timetuple())+time.microsecond/1000000.0)
+                phour.append(showtime(time.hour))
+                sa,f,mf,t=stream.values()
+                
                 pt.append(t)
+
+                ## Sensible q estimate 
+                cfm=mf*(f/100.0)
+                q=cfm*1.08*(sa-t)
+                pq.append(q)
+
+                ## Mixed air model.  Assume no change in W
+                hin=0.240*sa+W*(1061+0.444*sa)
+                hout=0.240*t+W*(1061+0.444*t)
+                
+                ## mass ratio of exchanged air, use CF/CFM not mass (small temp range)
+                mr=(cfm*delta)/(181*12)  
+                hroom=mr*(hin-hout)+(1-mr)*hroom
+                
+                ## Temp of the room based off enthaplpy
+                #troom=(hroom-W*1061)/(0.240+W*0.444)
+
+                phin.append(hin)
+                phroom.append(hroom)
+                phout.append(hout)
+                perror.append(hroom-hout)
 
         print len(data['time'])
 
         cur.close()
-        Graph(data,['q','t','mcp']).run()
+        Graph(data,['t','q','hroom','error']).run()
 
 ######
 ## Graph
 
 COLORS = [
-        (0.725490, 0.329412, 0.615686, 1.0),
         (0.121569, 0.313725, 0.552941, 1.0),
-        (1.000000, 0.000000, 0.000000, 1.0)
+        (0.725490, 0.329412, 0.615686, 1.0),
+        (1.000000, 0.500000, 0.000000, 1.0),
+        (1.000000, 0.000000, 0.000000, 1.0),
+        (0.000000, 0.500000, 0.000000, 1.0),
         ]
 
 from enthought.traits.api import HasTraits
@@ -334,19 +359,24 @@ from enthought.enable.component_editor import ComponentEditor
 from enthought.chaco.api import create_line_plot
 from enthought.chaco.tools.api import BroadcasterTool, PanTool, DragZoom
 
-import numpy as np
-
-
 class Graph(HasTraits):
     plot=None
     traits_view=View(Item('plot',editor=ComponentEditor(), show_label=False),
-                     width=1024, height=1024, resizable=True, title="Plot")
+                     width=1200, height=1024, resizable=True, title="Plot")
     
     def __init__(self,data,series):
         super(Graph,self).__init__()
         
         plot_area = OverlayPlotContainer(border_visible=True)
         container = HPlotContainer(padding=50, bgcolor="transparent")
+
+        ## hour bar (start of the hour).
+        plot=create_line_plot((data['time'],data['hour']),color=(0.500000, 0.500000, 0.500000, 0.5))
+        plot_area.add(plot)
+
+        ## Attach broadcaster to special grid
+        broadcaster = BroadcasterTool()
+        plot.tools.append(broadcaster)
 
         colors=COLORS
         for y in series:
@@ -364,23 +394,21 @@ class Graph(HasTraits):
                             title = y,
                             border_visible = True,)
             axis.bounds = [60,0]
-            axis.padding_left = 5
-            axis.padding_right = 5
+            axis.padding_left = 1
+            axis.padding_right = 1
             container.add(axis)
 
         # time (last plot)
         time = PlotAxis(orientation="bottom", component=plot, mapper=plot.x_mapper)
         plot.overlays.append(time)
-        grid = PlotGrid(mapper=plot.x_mapper, orientation="vertical",
-                        line_color="lightgray", line_style="dot")
-        plot.underlays.append(grid)
+        #grid = PlotGrid(mapper=plot.x_mapper, orientation="vertical",
+        #                line_color="lightgray", line_style="dot")
+        #plot.underlays.append(grid)
 
         ## Tools
-        broadcaster = BroadcasterTool()
         for plot in plot_area.components:
             broadcaster.tools.append(PanTool(plot))
             broadcaster.tools.append(DragZoom(plot,maintain_aspect_ratio=False,drag_button='right'))
-        plot.tools.append(broadcaster)
 
         ## Plot
         container.add(plot_area)
@@ -388,6 +416,19 @@ class Graph(HasTraits):
         
     def run(self):
         self.configure_traits()
+
+######
+## Util
+
+def deltaMin(delta):
+    return delta.days*(1440) + delta.seconds/60.0+delta.microseconds/60000000.0
+
+
+def showtime(hour):
+    if hour>12:
+        return (24-hour)-12
+    else:
+        return hour-12
 
 ######
 ## Main
