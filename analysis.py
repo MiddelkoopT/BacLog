@@ -293,8 +293,8 @@ class Analysis:
         pt=data['t']=[]
         pq=data['q']=[]
         phin=data['hin']=[]
-        phroom=data['hroom']=[]
         phout=data['hout']=[]
+        phroom=data['hroom']=[]
         perror=data['error']=[]
 
         ## Inital values
@@ -313,43 +313,54 @@ class Analysis:
                 phour.append(showtime(time.hour))
                 sa,f,mf,t=stream.values()
                 
-                pt.append(t)
-
                 ## Sensible q estimate 
                 cfm=mf*(f/100.0)
                 q=cfm*1.08*(sa-t)
                 pq.append(q)
 
                 ## Mixed air model.  Assume no change in W
-                hin=0.240*sa+W*(1061+0.444*sa)
-                hout=0.240*t+W*(1061+0.444*t)
+                hin =0.240*sa+W*(1061+0.444*sa)
+                hout=0.240*t +W*(1061+0.444*t)
                 
                 ## mass ratio of exchanged air, use CF/CFM not mass (small temp range)
                 mr=(cfm*delta)/(181*12)  
-                hroom=mr*(hin-hout)+(1-mr)*hroom
+                hroom=mr*(hin-hout)+(1.0-mr)*hroom
                 
-                ## Temp of the room based off enthaplpy
-                #troom=(hroom-W*1061)/(0.240+W*0.444)
+#                # Heat gain model
+#                hroom+=1*delta ## heat gain in Btu/(lb*min)
+#                qin=cfm*4.5*(hin-hroom)
+#                qout=cfm*4.5*(hroom-hout)
+#                error=(qin-qout)/((181*12)*4.5) ## convert to h/min
+#                print hin,hout,hin-hout,hroom,error,qin,qout,qin-qout
+#                
+#                # Temp of the room based off enthaplpy
+#                troom=(hroom-W*1061)/(0.240+W*0.444)
 
                 phin.append(hin)
-                phroom.append(hroom)
                 phout.append(hout)
+                phroom.append(hroom)
                 perror.append(hroom-hout)
 
-        print len(data['time'])
-
+        ## assume numerically stable!
+        n=len(data['time'])
+        sum=0.0
+        for i in data['error']:
+            sum+=i
+            
+        print n,sum/n
+        
         cur.close()
-        Graph(data,['t','q','hroom','error']).run()
+        Graph(data,['hin','hout','q','hroom','error']).run()
 
 ######
 ## Graph
 
 COLORS = [
         (0.121569, 0.313725, 0.552941, 1.0),
-        (0.725490, 0.329412, 0.615686, 1.0),
         (1.000000, 0.500000, 0.000000, 1.0),
-        (1.000000, 0.000000, 0.000000, 1.0),
+        (0.725490, 0.329412, 0.615686, 1.0),
         (0.000000, 0.500000, 0.000000, 1.0),
+        (1.000000, 0.000000, 0.000000, 1.0),
         ]
 
 from enthought.traits.api import HasTraits
