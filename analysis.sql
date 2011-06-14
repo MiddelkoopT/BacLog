@@ -22,10 +22,10 @@ SELECT
 INTO Data
 FROM 
     Log JOIN Devices USING(IP,port) JOIN Objects USING (deviceID,type,instance)
-WHERE
-    device=9040 AND instance/100=124
+-- WHERE
+--     device=9040 AND instance/100=124
 ORDER BY time
-LIMIT 100000;
+LIMIT 500000;
 
 CREATE INDEX i_Data_time ON Data (time);
 
