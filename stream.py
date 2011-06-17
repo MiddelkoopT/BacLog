@@ -19,7 +19,7 @@ class Object:
         
     def __setattr__(self,name,value):
         if name in ('device','type','instance','_hash') and getattr(self,name,None) is not None:
-            raise False ## Read only access to definition
+            raise Exception('attempt to change read only definition')
         self.__dict__[name]=value
         
     def __repr__(self):
@@ -67,14 +67,40 @@ class Object:
         return self.tags.keys()
 
 
+class Variable:
+    
+    def __init__(self,name,source=None):
+        self.name=name
+        self.source=source
+        if source:
+            self._hash=hash((source.device,source.type,source.instance,name))
+        else:
+            self._hash=hash(name)
+
+    def __setattr__(self,name,value):
+        if name in ('device','type','instance','_hash') and getattr(self,name,None) is not None:
+            raise Exception('attempt to change read only definition')
+        self.__dict__[name]=value
+        
+    def __hash__(self):
+        return self._hash
+    
+    def __eq__(self,other):
+        return self.name==other.name and self.source==other.source
+    
+    def __repr__(self):
+        return "%s+%s" % (self.name,self.source)
+        
+
 class Value:
-    def __init__(self,var,value,time):
+    def __init__(self,var,value,time,wave):
         self.var=var
         self.value=value
         self.time=time
+        self.wave=wave
         
     def __repr__(self):
-        return "%s(%s)" % (self.var, self.value)
+        return "%s(%s)!%d" % (self.var, self.value, self.wave)
 
 
 class Objects:
@@ -90,8 +116,8 @@ class Objects:
     def __getitem__(self,index):
         return self.objects[index]
     
-    def __contains__(self,object):
-        return self.object.has_key(object)
+    def __contains__(self,obj):
+        return obj in self.objects
     
     def __len__(self):
         return self.objects.__len__()
@@ -112,7 +138,10 @@ class Objects:
         else:
             self.objects.add(object)
             
-    def single(self):
+    def object(self):
+        '''
+        Convert into object
+        '''
         assert len(self.objects)==1
         return self.objects.pop()
             
@@ -183,30 +212,52 @@ class Objects:
 
 
 class Connection:
-    def __init__(self):
+    def __init__(self,name):
+        self.name=name
         self.output=[]
         self.input=[]
-        self._send=None
-        self._recv=None
-        
-    def addOut(self,output):
-        self.output.append(output)
-    
-    def connect(self):
         self._send={}
-        for stream in self.output:
-            for o in stream._input.objects:
-                self._send.setdefault(o,[]).append(stream)
-    
+        
+    def addOut(self,sink):
+        assert sink not in self.output ## Adding sink twice
+        self.output.append(sink)
+        link=[]
+        for source in self.input:
+            for obj in source._query():
+                if sink._register(obj):
+                    link.append(obj)
+                    source._subscribe(obj)
+        for l in link:
+            self._send.setdefault(l,[]).append(sink)
+            
+        #print 'Connection.addOut>', self.name, link, self._send
+        
+
+    def addIn(self,source):
+        assert source not in self.input ## Adding sink twice
+        self.input.append(source)
+        source._connections.append(self) ## FIXME: Move to subscribe call
+        link=[]
+        for sink in self.output:
+            for obj in source._query():
+                if sink._register(obj):
+                    link.append(obj)
+                    source._subscribe(obj)
+        for l in link:
+            self._send.setdefault(l, []).append(sink)
+        #print 'Connection.addIn> ', self.name, link, self._send
+
+    def __str__(self):
+        return "%s@Connection" % self.name
+        
     def __repr__(self):
-        output=['Connection']
-        output.append('input:')
+        output=["%s@Connection[" % self.name]
         for o in self.input:
             output.append(o._name)
-        output.append('output:')
+        output.append(';')
         for o in self.output:
             output.append(o._name)
-        print self.output
+        output.append(']')
         return string.join(output)
     
     def send(self,value):
@@ -221,54 +272,118 @@ class Stream:
         self._input=Objects()
         self._output=Objects()
         self._connections=[]
-        self._names=[]
-        self._var={}
-        self._prev=None
-        self._run=False
+
+        self._names=[]          # ordered list of variable names in class
+        self._var={}            # var:name 
+
+        self._previous={}       # var:previous_value
+        self._last=None         # last update for delta
+        self._wave=0            # last seen wave number
+
+        self._run=False         # stream running (start complete)
         
-        self._plotdata={} ## name:(color,plotdata)
-        self._plotname=[] ## plot order
-        self._plottime=[]
+        self._plotdata={}       # name:(color,plotdata)
+        self._plotname=[]       # plot order
+        self._plottime=[]       # time axis
 
         self._init(*args,**kwargs)
         
+    def __str__(self):
+        return "%s@Stream" % self._name
+    
     def __repr__(self):
-        output=[self._name]
-        output.append('input:')
-        for o in self._input:
-            name=self._var[o]
-            output.append("%s(%s)" % (name,getattr(self,name)))
+        output=["%s@Stream[" % self._name]
+        for i in self._input:
+            name=self._var.get(i,str(i))
+            output.append("%s(%s)" % (name,self._previous[i]))
+        output.append(';')
+        for o in self._output:
+            name=self._var.get(o,str(o))
+            output.append("%s(%s)" % (name,self._previous[o]))
+        output.append(']')
         return string.join(output)
     
     def _recv(self,value):
-        #print "Stream.recv>", self._name, value
+        #print "Strem.recv>",self._name, value, self._wave #, value.time
+
+        ## consistency check
+        assert self._last is None or value.time>=self._last
+        assert value.time!=self._last or value.wave>=self._wave
+        self._wave=value.wave
 
         ## In startup mode     
         if not self._run:
-            starting=False
-            if self._prev is None:
-                self._prev=value.time
-            for name in self._var.values():
-                if getattr(self,name,None) is None:
-                    starting=True
-                name=self._var[value.var] ## same "Set Variable" below
-                setattr(self,name,value.value)
-            if starting:
-                return
+            if self._last is None:
+                self._last=value.time
+            for i in self._input:
+                ## Check if incomplete if so set value and return.
+                if self._previous[i] is None:
+                    self._previous[value.var]=value.value
+                    name=self._var.get(value.var,None)
+                    if name:
+                        setattr(self,name,value.value)
+                    return
+
             print "Stream.recv>Started:", self
             self._start() ## compute initial values.
             self._run=True
 
         ## Set Variable
-        name=self._var[value.var]
-        setattr(self,name,value.value)
-        
-        delta=value.time-self._prev
-        self._prev=value.time
+        name=self._var.get(value.var,None)
+        if name is not None:
+            setattr(self,name,value.value)
+
+        ## Calculate time delta.
+        delta=value.time-self._last
+        self._last=value.time
         deltasec=delta.days*(1440) + delta.seconds+delta.microseconds/1000000.0
 
         self._compute(deltasec)
         self._plot(value.time)
+
+        ## Send changed values to connections.
+        for o in self._output:
+            if self._var[o] is None:
+                continue
+            v=getattr(self,self._var[o])
+            if v!=self._previous.get(o,None):
+                self._send(o,v)
+                self._previous[o]=v
+        
+        ## Done. update previous input 
+        self._previous[value.var]=value.value
+
+    def _send(self,obj,value):
+        for c in self._connections:
+            c.send(Value(obj,value,self._last,self._wave+1))
+        
+                
+    def _addName(self,name,var,value=None):
+        if name is None:
+            return
+        self._names.append(name)
+        self._var[var]=name
+        setattr(self,name,value)
+
+    def _addIn(self,var,name=None):
+        if isinstance(var,Objects):
+            assert name is None
+            for v in var:
+                self._input.add(v)
+                self._previous[v]=None
+        self._addName(name,var)
+        self._input.add(var)
+        self._previous[var]=None
+        
+    def _addOut(self,var,name=None):
+        if isinstance(var,Objects):
+            assert name is None
+            for v in var:
+                self._output.add(v)
+                self._previous[v]=None
+        self._addName(name,var)
+        self._output.add(var)
+        self._previous[var]=None
 
     def _plot(self,time):
         self._plottime.append(time)
@@ -279,60 +394,40 @@ class Stream:
     def _addPlot(self,name,color):
         self._plotname.append(name)
         self._plotdata[name]=(color,[])
-        
-    def _addIn(self,var,name):
-        if isinstance(var,Objects):
-            var=var.single()
-        self._names.append(name)
-        self._var[var]=name
-        self._input.add(var)
-        setattr(self,name,None)
-        
+
     def _values(self):
+        '''
+        Returns the values in order
+        '''
         result=[]
         for n in self._names:
             result.append(getattr(self,n))
         return result
-            
-        
-        
-class RoomEnthalpy(Stream):
-    
-    def _init(self,vav):
-        self._addIn(vav.getTag('descriptor','AUX TEMP'),'sa')
-        self._addIn(vav.getTag('descriptor','FLOW'),'f')
-        self._addIn(vav.getTag('descriptor','CTL FLOW MAX'),'mf')
-        self._addIn(vav.getTag('descriptor','CTL TEMP'),'t')
 
-        self._addPlot('hin',  (0.121569, 0.313725, 0.552941, 1.0))
-        self._addPlot('hout', (1.000000, 0.500000, 0.000000, 1.0))
-        self._addPlot('q',    (0.725490, 0.329412, 0.615686, 1.0))
-        self._addPlot('hroom',(0.000000, 0.500000, 0.000000, 1.0))
-        self._addPlot('error',(1.000000, 0.000000, 0.000000, 1.0))
+    ## Default subscription methods
+    
+    def _register(self,var):
+        '''
+        Return True if interested in receiving this object.
+        '''
+        return var in self._input
+    
+    def _query(self):
+        '''
+        Return the set of available output objects
+        '''
+        return self._output
+
+    def _subscribe(self,vars):
+        '''
+        Notify that an output objects has been subscribed.
+        '''
+        return True
 
     def _start(self):
-        W=0.008 ## assume humidity ratio of 50% @ 71F
-        self.hroom=0.240*self.t+W*(1061+0.444*self.t)
-        self.hroom=0 ## FIXME: proper heat loss model needed
-        
-    def _compute(self,delta):
-        #print "RoomEnthalpy.compute>"
-
-        W=0.008 ## assume humidity ratio of 50% @ 71F
-        sa,f,mf,t=self._values() ## ordered
-        
-        ## Sensible q estimate 
-        cfm=mf*(f/100.0)
-        self.q=cfm*1.08*(sa-t)
-
-        ## Mixed air model.  Assume no change in W
-        self.hin =0.240*sa+W*(1061+0.444*sa)
-        self.hout=0.240*t +W*(1061+0.444*t)
-        
-        ## mass ratio of exchanged air, use CF/CFM not mass (small temp range)
-        mr=(cfm*delta/60.0)/(181*12)  
-        self.hroom=mr*(self.hin-self.hout)+(1.0-mr)*self.hroom
-        
-        self.error=self.hin-self.hout
+        '''
+        Stream is done pre-loading
+        '''
+        return True
 
         

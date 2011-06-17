@@ -22,12 +22,15 @@ SELECT
 INTO Data
 FROM 
     Log JOIN Devices USING(IP,port) JOIN Objects USING (deviceID,type,instance)
--- WHERE
---     device=9040 AND instance/100=124
 ORDER BY time
-LIMIT 500000;
+LIMIT 100000;
 
 CREATE INDEX i_Data_time ON Data (time);
+
+-- Rename Table
+DROP TABLE IF EXISTS Data2;
+ALTER TABLE Data RENAME TO Data2;
+CREATE INDEX i_Data2_time ON Data2 (time);
 
 SELECT * FROM Data;
 
