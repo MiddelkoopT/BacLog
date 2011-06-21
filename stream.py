@@ -100,7 +100,7 @@ class Value:
         self.wave=wave
         
     def __repr__(self):
-        return "%s(%s)!%d" % (self.var, self.value, self.wave)
+        return "%s(%s)+%d" % (self.var, self.value, self.wave)
 
 
 class Objects:
@@ -262,7 +262,9 @@ class Connection:
     
     def send(self,value):
         for stream in self._send.get(value.var,[]):
-            stream._recv(value) ## send value to the recv methods of all the streams 
+            stream._recv(value) ## send value to the recv methods of all the streams
+        for stream in self._send.get(value.var,[]):
+            stream._notify()    ## notify connections of changes.  
 
     
 class Stream:
@@ -304,20 +306,15 @@ class Stream:
         return string.join(output)
     
     def _recv(self,value):
-        #print "Strem.recv>",self._name, value, self._wave #, value.time
-
-        ## consistency check
-        assert self._last is None or value.time>=self._last
-        assert value.time!=self._last or value.wave>=self._wave
-        self._wave=value.wave
+        if self._run:
+            print "Strem.recv>",self._name, value, self._wave, value.time-self._last
 
         ## In startup mode     
         if not self._run:
-            if self._last is None:
-                self._last=value.time
             for i in self._input:
                 ## Check if incomplete if so set value and return.
                 if self._previous[i] is None:
+                    self._last=value.time
                     self._previous[value.var]=value.value
                     name=self._var.get(value.var,None)
                     if name:
@@ -327,13 +324,19 @@ class Stream:
             print "Stream.recv>Started:", self
             self._start() ## compute initial values.
             self._run=True
+            
+        ## Consistancy check
+        assert value.time>=self._last
+        assert value.time>self._last or value.wave>=self._wave  ## data out of order 
 
         ## Set Variable
         name=self._var.get(value.var,None)
         if name is not None:
             setattr(self,name,value.value)
+            
 
-        ## Calculate time delta.
+        ## Calculate time delta and wave
+        self._wave=value.wave
         delta=value.time-self._last
         self._last=value.time
         deltasec=delta.days*(1440) + delta.seconds+delta.microseconds/1000000.0
@@ -341,6 +344,11 @@ class Stream:
         self._compute(deltasec)
         self._plot(value.time)
 
+        ## Done. update previous input 
+        self._previous[value.var]=value.value
+
+
+    def _notify(self):
         ## Send changed values to connections.
         for o in self._output:
             if self._var[o] is None:
@@ -350,8 +358,6 @@ class Stream:
                 self._send(o,v)
                 self._previous[o]=v
         
-        ## Done. update previous input 
-        self._previous[value.var]=value.value
 
     def _send(self,obj,value):
         for c in self._connections:

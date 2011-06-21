@@ -56,7 +56,7 @@ class RoomSum(Stream):
     def _init(self):
         print "RoomSum.init>"
         self._addOut(Variable('hin_sum'),'hin_sum')
-        self._addIn(Object(9040,1,12278)) ## FIXME: Hard coded test
+        self._addIn(Object(9040,0,12415)) ## FIXME: Hard coded test
         
     def _register(self,var):
         #print "RoomSum.register>", var
