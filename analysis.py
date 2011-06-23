@@ -3,7 +3,7 @@
 ## Stream compute test code.
 
 from stream import Variable, Value, Connection, Stream, Object
-from data import Data
+from data import Data, DataStream
 import buildings
 import graph
 
@@ -82,6 +82,7 @@ class Analysis:
     def run(self):
         print "Analysis.run>"
         data=Data()
+        devices=data.getDevices()
         objects=data.getObjects()
         building=buildings.PughHall()
         building.tag(objects)
@@ -111,8 +112,9 @@ class Analysis:
         print repr(dc)
         print repr(rc)
 
-        ## Process Data
-        for time,device,type,instance,value in data.getData(): ## TODO: Refactor cursor into iter
+        ## Process DataStream
+        stream=DataStream('data.sql.gz',devices)
+        for time,device,type,instance,value in stream:
             v=Value(data.getObject(device,type,instance),value,time,0)
             dc.send(v)
         

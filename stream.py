@@ -306,8 +306,8 @@ class Stream:
         return string.join(output)
     
     def _recv(self,value):
-        if self._run:
-            print "Strem.recv>",self._name, value, self._wave, value.time-self._last
+        #if self._run:
+        #    print "Strem.recv>",self._name, value, self._wave, value.time-self._last
 
         ## In startup mode     
         if not self._run:

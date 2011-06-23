@@ -1,7 +1,8 @@
 -- BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 -- Analysis queries.
 
--- psql -q -A -F',' -P footer=off -c "
+-- psql -q -A -F',' -P footer=off -c ""
+-- pg_dump -a -Z9 -t Log -f baclog-dump-pughhall-v3-r101_2011-06-01.sql.gz mtim
 
 -- Metadata
 SELECT * FROM Devices;
