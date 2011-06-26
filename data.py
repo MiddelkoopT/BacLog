@@ -5,6 +5,8 @@ import psycopg2
 from stream import Object, Objects
 
 import gzip
+import re
+
 from datetime import datetime, timedelta, tzinfo
 
 class TZ(tzinfo):
@@ -68,40 +70,65 @@ class Data:
         return cur
 
 class DataStream:
-    def __init__(self,filename,devices):
+    def __init__(self,filename,devices,dump=True):
         self.devices=devices
+        if not dump:
+            self.fh=open(filename,'rb')
+            return
+        ## Raw dump
         self.fh=gzip.open(filename,'rb')
-        self.last=None
         for l in self.fh:
             if l[0:8]=='COPY log':
                 break
-        
+            
     def __iter__(self):
-        count=0
-        skip=0
+        ## indicators
         start=datetime.now()
+        count=0
+        maxi=0
+        maxd=timedelta(0)
+
+        i=0
+        regex=re.compile('^(\d\d\d\d)-([01]\d)-([0-3]\d) ([0-2]\d):([0-6]\d):([0-6]\d)(\.\d+)?([+-]\d\d)$')
+        buffer=[]
         for l in self.fh:
             if l=="\\.\n":
-                return
+                break
             count+=1
+
             time, ip, port, objectid, type, instance, status, value = l.split("\t")
-            ## Data convert
+            ## Data convert (this is why we use databases!)
             port=int(port)
             type=int(type)
             instance=int(instance)
             device=self.devices[(ip,port)]
             value=float(value)
-            if len(time[0:-3])==19:
-                ctime=datetime.strptime(time[0:-3],'%Y-%m-%d %H:%M:%S')
-            else:
-                ctime=datetime.strptime(time[0:-3],'%Y-%m-%d %H:%M:%S.%f')
-            ctime=ctime.replace(tzinfo=TZ(int(time[-3:])))
-            ## drop out of order packets.
-            if (self.last is not None) and ctime<self.last:
-                #print "DataStream> drop", (ctime,device,type,instance,value)
-                skip+=1
-                continue
-            self.last=ctime
+            
+            year,month,day,hour,min,sec,micro,tz=regex.match(time).groups()
+            ctime=datetime(int(year),int(month),int(day),
+                           int(hour),int(min),int(sec),
+                           int(float(micro)*1000000) if micro else 0,
+                           TZ(int(tz)))
+            ## ordered buffer
+            event=(ctime,device,type,instance,value)
+            for i,e in enumerate(buffer):
+                if ctime>=e[0]:
+                    break
+            buffer.insert(i,event)
+            
+            ## Monitor
+            maxd=max(maxd,buffer[0][0]-buffer[-1][0])
+            maxi=max(maxi,i)
             if count%10000==0:
-                print skip, count, 100*skip/count, count*100/42e6,datetime.now()-start
-            yield (ctime,device,type,instance,value)
+                print count,datetime.now()-start,maxi,maxd
+                
+            ## fill buffer
+            if len(buffer)<100000: ## keep buffer full
+                continue
+            
+            yield buffer.pop() 
+
+        ## drain buffer
+        while buffer:
+            yield buffer.pop()
+        return

@@ -56,7 +56,6 @@ class RoomSum(Stream):
     def _init(self):
         print "RoomSum.init>"
         self._addOut(Variable('hin_sum'),'hin_sum')
-        self._addIn(Object(9040,0,12415)) ## FIXME: Hard coded test
         
     def _register(self,var):
         #print "RoomSum.register>", var
@@ -68,6 +67,8 @@ class RoomSum(Stream):
         return False
         
     def _compute(self,delta):
+        ## Online weighted average/stdev
+        ## http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance 2011-06-25
         #print "RoomSum.compute>",delta,repr(self)
         return True
         
@@ -90,7 +91,6 @@ class Analysis:
         
         zone=objects.getTag('zone',1)
         vavs=zone.getValues('vav')
-        vavs=[129,130]
         
         ## Build network
         ds=Source('data',zone)
@@ -105,10 +105,7 @@ class Analysis:
             r=RoomEnthalpy(('VAV%s') % vav,zone.getTag('vav',vav))
             dc.addOut(r)
             rc.addIn(r)
-            # connect to sum
 
-        dc.addOut(rs)
-                    
         print repr(dc)
         print repr(rc)
 
@@ -119,10 +116,11 @@ class Analysis:
             dc.send(v)
         
         ## Plot
-        plot=dc.output[0]
-        graph.Graph(plot._plottime,plot._plotdata,plot._plotname).run()
+        #plot=dc.output[0]
+        #graph.Graph(plot._plottime,plot._plotdata,plot._plotname).run()
 
-
+import cProfile
 if __name__=='__main__':
-    Analysis().run()
+    cProfile.run('Analysis().run()', 'analysis.prof')
+    #Analysis().run()
     
