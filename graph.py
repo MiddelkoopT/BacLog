@@ -3,23 +3,28 @@
 
 from time import mktime
 
-from enthought.traits.api import HasTraits
-from enthought.chaco.api import Plot, ArrayPlotData, HPlotContainer, OverlayPlotContainer, PlotAxis, PlotGrid
-from enthought.traits.ui.api import View, Item
-from enthought.enable.component_editor import ComponentEditor
-from enthought.chaco.api import create_line_plot
-from enthought.chaco.tools.api import BroadcasterTool, PanTool, DragZoom
+from traits.api import HasTraits
+from chaco.api import HPlotContainer, OverlayPlotContainer, PlotAxis #, PlotGrid
+from traitsui.api import View, Item
+from enable.component_editor import ComponentEditor
+from chaco.api import create_line_plot
+from chaco.tools.api import BroadcasterTool, PanTool, DragZoom
 
 class Graph(HasTraits):
     plot=None
     traits_view=View(Item('plot',editor=ComponentEditor(), show_label=False),
                      width=1200, height=1024, resizable=True, title="Plot")
     
-    def __init__(self,ptime,plots,names):
+    def __init__(self):
         super(Graph,self).__init__()
-        
-        plot_area = OverlayPlotContainer(border_visible=True)
-        container = HPlotContainer(padding=50, bgcolor="transparent")
+
+        self.plot_area = OverlayPlotContainer(border_visible=True)
+        self.container = HPlotContainer(padding=50, bgcolor="transparent")
+
+    def add(self,series,dash="solid"):
+        ptime=series._plottime
+        plots=series._plotdata
+        names=series._plotname
 
         ## hour bar (start of the hour).
         hour,seconds=[],[]
@@ -28,7 +33,7 @@ class Graph(HasTraits):
             seconds.append(mktime(t.timetuple())+t.microsecond/1000000.0)
             
         plot=create_line_plot((seconds,hour),color=(0.500000, 0.500000, 0.500000, 0.5))
-        plot_area.add(plot)
+        self.plot_area.add(plot)
 
         ## Attach broadcaster to special grid
         broadcaster = BroadcasterTool()
@@ -36,8 +41,8 @@ class Graph(HasTraits):
 
         for name in names:
             color,data=plots[name]
-            plot=create_line_plot((seconds,data),color=color)
-            plot_area.add(plot)
+            plot=create_line_plot((seconds,data),color=color,dash=dash)
+            self.plot_area.add(plot)
     
             axis = PlotAxis(orientation="left", resizable="v",
                             mapper = plot.y_mapper,
@@ -51,25 +56,28 @@ class Graph(HasTraits):
             axis.bounds = [60,0]
             axis.padding_left = 1
             axis.padding_right = 1
-            container.add(axis)
+            self.container.add(axis)
 
-        # time (last plot)
+
+        ## Tools
+        for plot in self.plot_area.components:
+            broadcaster.tools.append(PanTool(plot))
+            broadcaster.tools.append(DragZoom(plot,maintain_aspect_ratio=False,drag_button='right',restrict_domain=True))
+        
+    def run(self):
+
+        ## Time axis (first one)
+        plot=self.plot_area.components[0]
         time = PlotAxis(orientation="bottom", component=plot, mapper=plot.x_mapper)
         plot.overlays.append(time)
         #grid = PlotGrid(mapper=plot.x_mapper, orientation="vertical",
         #                line_color="lightgray", line_style="dot")
         #plot.underlays.append(grid)
 
-        ## Tools
-        for plot in plot_area.components:
-            broadcaster.tools.append(PanTool(plot))
-            broadcaster.tools.append(DragZoom(plot,maintain_aspect_ratio=False,drag_button='right'))
-
         ## Plot
-        container.add(plot_area)
-        self.plot=container
-        
-    def run(self):
+        self.container.add(self.plot_area)
+        self.plot=self.container
+
         self.configure_traits()
 
 ######

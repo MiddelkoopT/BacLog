@@ -325,17 +325,16 @@ class Stream:
             self._start() ## compute initial values.
             self._run=True
             
-        ## Consistancy check
+        ## Consistency check
         if value.time<self._last:
             print self._last, value.time, value
-        assert value.time>=self._last
+        assert value.time>=self._last                           ## data out of order
         assert value.time>self._last or value.wave>=self._wave  ## data out of order 
 
         ## Set Variable
         name=self._var.get(value.var,None)
         if name is not None:
             setattr(self,name,value.value)
-            
 
         ## Calculate time delta and wave
         self._wave=value.wave
@@ -344,7 +343,7 @@ class Stream:
         deltasec=delta.days*(1440) + delta.seconds+delta.microseconds/1000000.0
 
         self._compute(deltasec)
-        #self._plot(value.time)
+        self._plot(value.time)
 
         ## Done. update previous input 
         self._previous[value.var]=value.value

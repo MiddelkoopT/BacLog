@@ -1,6 +1,20 @@
 -- BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 -- Analysis queries.
 
+-- Analsyis.py Data table
+DROP TABLE IF EXISTS Data;
+SELECT 
+    time,device,type,instance,value 
+INTO Data
+FROM 
+    Log JOIN Devices USING(IP,port) JOIN Objects USING (deviceID,type,instance)
+ORDER BY time
+LIMIT 10000;
+
+CREATE INDEX i_Data_time ON Data (time);
+
+
+-- Other Analysis
 -- psql -q -A -F',' -P footer=off -c ""
 -- pg_dump -a -Z9 -t Log -f baclog-dump-pughhall-v3-r101_2011-06-01.sql.gz mtim
 
@@ -23,17 +37,9 @@ SELECT
 INTO Data
 FROM 
     Log JOIN Devices USING(IP,port) JOIN Objects USING (deviceID,type,instance)
-ORDER BY time
-LIMIT 100000;
+ORDER BY time;
 
 CREATE INDEX i_Data_time ON Data (time);
-
--- Rename Table
-DROP TABLE IF EXISTS Data2;
-ALTER TABLE Data RENAME TO Data2;
-CREATE INDEX i_Data2_time ON Data2 (time);
-
-SELECT * FROM Data;
 
 ------
 -- Analysis
@@ -79,4 +85,5 @@ WHERE
 				 OR (device=9040 AND type=1 AND instance=14877)
 				)
 ORDER BY time;
+
 

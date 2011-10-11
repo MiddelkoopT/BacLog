@@ -1,5 +1,6 @@
 /.settings
 *.pyc
 *.pyo
+*.prof
 local.ini
 nohup.out
