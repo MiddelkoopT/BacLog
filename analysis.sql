@@ -13,8 +13,13 @@ LIMIT 10000;
 
 CREATE INDEX i_Data_time ON Data (time);
 
+-- Debugging
 
--- Other Analysis
+-- 249/126/AuxTemp missing
+SELECT time,value FROM Data WHERE device=9040 AND type=0 AND instance=11215;
+
+
+-- Old Analysis
 -- psql -q -A -F',' -P footer=off -c ""
 -- pg_dump -a -Z9 -t Log -f baclog-dump-pughhall-v3-r101_2011-06-01.sql.gz mtim
 

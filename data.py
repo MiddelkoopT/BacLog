@@ -2,7 +2,7 @@
 ## Analysis Data
 
 import psycopg2
-from stream import Object, Objects
+from stream import Instance, InstanceList
   
 class Data:
 
@@ -24,10 +24,10 @@ class Data:
     def getObjects(self):
         cur=self.db.cursor()
         cur.execute("SELECT device,type,instance ,Objects.name,Objects.description FROM Devices JOIN Objects USING (deviceID)")
-        objects=Objects()
+        objects=InstanceList()
         for r in cur:
             device,otype,oinstance,name,description=r
-            o=Object(device,otype,oinstance)
+            o=Instance(device,otype,oinstance)
             o.name=name
             if description != None or description != '':
                 o.description=description

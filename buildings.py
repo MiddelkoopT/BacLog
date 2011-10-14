@@ -121,7 +121,7 @@ class PughHall(Building):
             object.setTag('module',object.instance/100)
             object.setTag('address',object.instance%100)
             
-        #### Derrived information
+        #### Derived information
         
         ## ahu zone
         if object.hasTag('ahu'):

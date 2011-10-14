@@ -2,49 +2,55 @@
 ## BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Stream compute test code.
 
-from stream import Variable, Value, Connection, Stream, Object
+from stream import Variable, Value, Connection, Stream, Instance
 from data import Data
 import buildings
 import graph
 
 
 class Zone(Stream):
-    
-    def _init(self,vav):
-        self._addIn(vav.getTag('descriptor','AUX TEMP').object(),'sa')
-        self._addIn(vav.getTag('descriptor','FLOW').object(),'f')
-        self._addIn(vav.getTag('descriptor','CTL FLOW MAX').object(),'mf')
-        self._addIn(vav.getTag('descriptor','CTL TEMP').object(),'t')
-        
-        app=vav.getTag('application').object()
-        self._addOut(Variable('hin',app),'hin')
-        
-        self._addPlot('sa',  (0.121569, 0.313725, 0.552941, 1.0))
-        self._addPlot('t',    (1.000000, 0.500000, 0.000000, 1.0))
-        self._addPlot('f',    (0.725490, 0.329412, 0.615686, 1.0))
+    _monitor=[
+              ('AUX TEMP','sa'),
+              ('FLOW','pf'), # percent flow
+              ('CTL FLOW MAX','mf'),
+              ('CTL TEMP','t')
+              ]
 
-    def _start(self):
-        pass
-        
+    def _init(self,vav):
+        ## register descriptor/name and add as output
+        for descriptor,name in self._monitor:
+            var=vav.getTag('descriptor',descriptor).single()
+            var.name=name
+            self._addIn(var,name)
+            if name in ['sa','t']:
+                self._addOut(var,name)
+            
+        ## derived variable
+        app=vav.getTag('application').single()
+        self._addOut(Variable('f',app),'f')
+                    
     def _compute(self,delta):
-        #print "RoomEnthalpy.compute>"
+        #print "Zone.compute>"
         #print self._name,self.sa,self.t,self.f
-        return True
+        self.f=self.pf*self.mf
     
 class Total(Stream):
     
     def _init(self):
-        print "Total.init>"
-        
+        #print "Total.init>"
+        pass
+
     def _register(self,var):
-        print "Total.register>", var
-        if var in self._input:
-            return True
+        #print "Total.register>", var
+        assert var not in self._input ## duplicate register
+        self._addIn(var)
         return True
         
     def _compute(self,delta):
-        repr(self)
-        return True
+        print "Total.compute>",
+        for value in self._value.values():
+            print value.var.name,value.value,
+        print
 
 class Source(Stream):
 
@@ -61,42 +67,46 @@ class Analysis:
 
     def run(self):
         print "Analysis.run>"
-        data=Data()
+        
+        db=Data()
         #devices=data.getDevices()
-        objects=data.getObjects()
+        objects=db.getObjects()
         building=buildings.PughHall()
         building.tag(objects)
         #building.check(objects)
         
         zone=objects.getTag('zone',1)
-        #vavs=zone.getValues('vav')
-        vavs=[125, 128]
+        vavs=zone.getValues('vav')
         
-        ## Build network
-        source=Source('source',zone)
-        connection=Connection('connection') # data connection
-        connection.addIn(source)
-        
-        #total=Total('total')
+        ## Compute streams
+        data=Source('data',zone)
+        total=Total('total')
+
+        source=Connection('source') # data connection
+        source.addIn(data)
+        dest=Connection('dest')     # total connection
+        dest.addOut(total)
         
         for vav in vavs:
-            r=Zone(('zone-VAV%s') % vav,zone.getTag('vav',vav))
-            connection.addOut(r)
-
-        #connection.addOut(total)
-        print repr(connection)
+            z=Zone(('zone-VAV%s') % vav,zone.getTag('vav',vav)) ## Zone stream
+            source.addOut(z)
+            dest.addIn(z)
+            
+        print "Analysis.run>", repr(source)
+        print "Analysis.run>", repr(dest)
 
         ## Process DataStream
-        for time,device,itype,instance,value in data.getData("WHERE time >= '2011-09-27 20:00' AND time <= '2011-09-28 07:00'"):
-            v=Value(data.getObject(device,itype,instance),value,time,0)
-            source.send(v)
-        
-        ## Plot
-        plot=graph.Graph()
-        plot.add(connection.output[0],'solid')
-        plot.add(connection.output[1],'dash')
-        plot.run()
+        # "WHERE time >= '2011-09-27 20:00' AND time <= '2011-09-28 07:00'"
+        for time,device,itype,instance,value in db.getData("WHERE time >= '2011-09-27 20:00' AND time <= '2011-09-27 22:00'"):
+            v=Value(db.getObject(device,itype,instance),value,time,0)
+            source.send(v) ## input data 
 
+        ## missing points;
+        for v in total._input:
+            if v in total._missing():
+                print "*",
+                print v
+        
 if __name__=='__main__':
     #import cProfile
     #cProfile.run('Analysis().run()', 'analysis.prof')

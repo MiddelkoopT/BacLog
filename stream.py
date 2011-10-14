@@ -5,7 +5,7 @@ import string
 trace=False
 
 
-class Object:
+class Instance:
     ## Meta information
     name=None
     description=None
@@ -89,7 +89,7 @@ class Variable:
         return self.name==other.name and self.source==other.source
     
     def __repr__(self):
-        return "%s+%s" % (self.name,self.source)
+        return "%s:%s" % (self.source,self.name)
         
 
 class Value:
@@ -103,7 +103,7 @@ class Value:
         return "%s(%s)+%d" % (self.var, self.value, self.wave)
 
 
-class Objects:
+class InstanceList:
     def __init__(self,objects=None):
         if objects is None:
             objects=set()
@@ -131,16 +131,16 @@ class Objects:
         output.append(']')
         return string.join(output,"\n  ")
     
-    def add(self,object):
-        if isinstance(object, Objects):
-            for o in object:
+    def add(self,instance):
+        if isinstance(instance, InstanceList):
+            for o in instance:
                 self.objects.add(o)
         else:
-            self.objects.add(object)
+            self.objects.add(instance)
             
-    def object(self):
+    def single(self):
         '''
-        Convert into object
+        Convert into a single Instance
         '''
         assert len(self.objects)==1
         return self.objects.pop()
@@ -156,7 +156,7 @@ class Objects:
         True value matches any tag value.
         False matches the absence of a tag.
         '''
-        result=Objects()
+        result=InstanceList()
         if value is True:
             for o in self.objects:
                 if o.hasTag(tag):
@@ -177,20 +177,20 @@ class Objects:
         True indicates a wildcard
         False indicates absence of a tag.
         '''
-        result=Objects(self.objects)
+        result=InstanceList(self.objects)
         for tag,value in tags.iteritems():
             result=result.getTag(tag,value)
         return result
 
     def getTagNot(self,tag):
-        result=Objects()
+        result=InstanceList()
         for o in self.objects:
             if not o.hasTag(tag):
                 result.add(o)
         return result
 
     def getTagsNot(self,tags):
-        result=Objects()
+        result=InstanceList()
         for o in self.objects:
             found=False
             for t in tags:
@@ -264,21 +264,26 @@ class Connection:
         for stream in self._send.get(value.var,[]):
             stream._recv(value) ## send value to the recv methods of all the streams
         for stream in self._send.get(value.var,[]):
-            stream._notify()    ## notify connections of changes.  
+            stream._notify() ## notify connections of changes.  
 
     
 class Stream:
+
+    ## Options
+    _plot=None
     
     def __init__(self,name,*args,**kwargs):
-        self._name=name
-        self._input=Objects()
-        self._output=Objects()
-        self._connections=[]
+        self._name=name             # name of stream.
+        self._input=InstanceList()  # list of input objects
+        self._output=InstanceList() # list of output objects
+        self._connections=[]        # list of connections
 
         self._names=[]          # ordered list of variable names in class
-        self._var={}            # var:name 
+        self._var={}            # var:name
+        self._value={}          # var:value
 
-        self._previous={}       # var:previous_value
+        self._previousIn={}     # var:previous_value
+        self._previousOut={}    # var:previous_value
         self._last=None         # last update for delta
         self._wave=0            # last seen wave number
 
@@ -297,25 +302,33 @@ class Stream:
         output=["%s@Stream[" % self._name]
         for i in self._input:
             name=self._var.get(i,str(i))
-            output.append("%s(%s)" % (name,self._previous[i]))
+            output.append("%s(%s)" % (name,self._previousIn[i]))
         output.append(';')
         for o in self._output:
             name=self._var.get(o,str(o))
-            output.append("%s(%s)" % (name,self._previous[o]))
+            output.append("%s(%s)" % (name,self._previousOut[o]))
         output.append(']')
         return string.join(output)
+    
+    def _missing(self):
+        result=[]
+        for i in self._input:
+            if self._previousIn[i] is None:
+                result.append(i)
+        return result
     
     def _recv(self,value):
         #if self._run:
         #    print "Strem.recv>",self._name, value, self._wave, value.time-self._last
 
-        ## In startup mode     
+        ## In startup mode (logic closely mirrors run)    
         if not self._run:
             for i in self._input:
                 ## Check if incomplete if so set value and return.
-                if self._previous[i] is None:
+                if self._previousIn[i] is None:
                     self._last=value.time
-                    self._previous[value.var]=value.value
+                    self._previousIn[value.var]=value.value
+                    self._value[value.var]=value
                     name=self._var.get(value.var,None)
                     if name:
                         setattr(self,name,value.value)
@@ -327,11 +340,14 @@ class Stream:
             
         ## Consistency check
         if value.time<self._last:
-            print self._last, value.time, value
+            print self._last, value.time, value  ## asserts on next line
         assert value.time>=self._last                           ## data out of order
         assert value.time>self._last or value.wave>=self._wave  ## data out of order 
 
+        ## Run mode (closely mirrors startup)
+
         ## Set Variable
+        self._value[value.var]=value
         name=self._var.get(value.var,None)
         if name is not None:
             setattr(self,name,value.value)
@@ -343,26 +359,26 @@ class Stream:
         deltasec=delta.days*(1440) + delta.seconds+delta.microseconds/1000000.0
 
         self._compute(deltasec)
-        self._plot(value.time)
+        if self._plot:
+            self._plotValues(value.time)
 
         ## Done. update previous input 
-        self._previous[value.var]=value.value
+        self._previousIn[value.var]=value.value
 
 
     def _notify(self):
         ## Send changed values to connections.
         for o in self._output:
-            if self._var[o] is None:
-                continue
+            assert self._var[o] is not None ## output not in variable table
             v=getattr(self,self._var[o])
-            if v!=self._previous.get(o,None):
-                self._send(o,v)
-                self._previous[o]=v
+            if v!=self._previousOut.get(o,None):
+                self._send(o,v) ## send changed value to connections
+                self._previousOut[o]=v
         
 
     def _send(self,obj,value):
         for c in self._connections:
-            c.send(Value(obj,value,self._last,self._wave+1))
+            c.send(Value(obj,value,self._last,self._wave+1)) ## send value to connections
         
                 
     def _addName(self,name,var,value=None):
@@ -373,28 +389,18 @@ class Stream:
         setattr(self,name,value)
 
     def _addIn(self,var,name=None):
-        if isinstance(var,Objects):
-            assert name is None
-            for v in var:
-                self._input.add(v)
-                self._previous[v]=None
         self._addName(name,var)
         self._input.add(var)
-        self._previous[var]=None
+        self._previousIn[var]=None
         
     def _addOut(self,var,name=None):
-        if isinstance(var,Objects):
-            assert name is None
-            for v in var:
-                self._output.add(v)
-                self._previous[v]=None
         self._addName(name,var)
         self._output.add(var)
-        self._previous[var]=None
+        self._previousOut[var]=None
 
-    def _plot(self,time):
+    def _plotValues(self,time):
         self._plottime.append(time)
-        for name,(color,data) in self._plotdata.iteritems():
+        for name,(color,data) in self._plotdata.iteritems(): #@UnusedVariable
             value=getattr(self,name)
             data.append(value)
         
@@ -425,7 +431,7 @@ class Stream:
         '''
         return self._output
 
-    def _subscribe(self,vars):
+    def _subscribe(self,vars): #@ReservedAssignment
         '''
         Notify that an output objects has been subscribed.
         '''
