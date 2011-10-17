@@ -1,6 +1,8 @@
 ## BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Analysis Data
 
+from datetime import datetime, timedelta, tzinfo
+
 import psycopg2
 from stream import Instance, InstanceList
   
@@ -15,8 +17,8 @@ class Data:
     def getDevices(self):
         devices={}
         cur=self.db.cursor()
-        cur.execute("SELECT device,name,IP,port FROM Devices")
-        for device,name,IP,port in cur:
+        cur.execute("SELECT device,IP,port FROM Devices")
+        for device,IP,port in cur:
             devices[(IP,port)]=device
         cur.close()
         return devices
@@ -39,10 +41,27 @@ class Data:
     def getObject(self,device,otype,oinstance):
         return self.object[(device,otype,oinstance)]
 
-    def getData(self,query=None):
-        ## Feeding data to stream.
+    def getData(self,limit):
         cur=self.db.cursor()
-        cur.execute("SELECT time,device,type,instance,value FROM Data %s ORDER BY time " % query)
-        print "Data.getData>", cur.rowcount
-        return cur
+        cur.execute("""
+        BEGIN;
+        DECLARE cur NO SCROLL CURSOR FOR
+            SELECT time,device,type,instance,value FROM Data %s ORDER BY time;
+        """ % limit)
+        
+        return Results(cur);
 
+
+class Results:
+    def __init__(self,cur):
+        self.cur=cur;
+        
+    def __iter__(self):
+        while True:
+            self.cur.execute("FETCH FORWARD 1000 FROM cur");
+            rows=self.cur.fetchall()
+            if rows==[]:
+                self.cur.execute("END;")
+                return
+            for r in rows:
+                yield r;

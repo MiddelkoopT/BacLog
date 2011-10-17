@@ -13,10 +13,15 @@ LIMIT 10000;
 
 CREATE INDEX i_Data_time ON Data (time);
 
--- Debugging
+-- adapted from the postgres manual on cursors 
+CREATE OR REPLACE FUNCTION datacur(refcursor,timestamp with time zone, timestamp with time zone) RETURNS refcursor AS '
+BEGIN
+	OPEN $1 NO SCROLL FOR SELECT time,device,type,instance,value FROM Data WHERE time >= $2 AND time <= $3 ORDER BY time;
+	RETURN $1;
+END 
+' LANGUAGE plpgsql;
 
--- 249/126/AuxTemp missing
-SELECT time,value FROM Data WHERE device=9040 AND type=0 AND instance=11215;
+-- Debugging
 
 
 -- Old Analysis
