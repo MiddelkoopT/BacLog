@@ -7,10 +7,14 @@ from math import exp, log
 
 def p_ws(F):
     '''
-    2009 ASHRAE Handbook ­– Fundamentals Chapter 1 equation 6
+    Computation of the saturation pressure from temperature.
+    
+    @var F: float temperature in F
 
     The saturation pressure over liquid water for the temperature range
     of 32 to 392°F is given by
+
+    2009 ASHRAE Handbook ­– Fundamentals Chapter 1 equation 6
     '''
     T=F+459.67
 

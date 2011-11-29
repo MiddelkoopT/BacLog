@@ -4,7 +4,7 @@
 import psycopg2
 from stream import Instance, InstanceList
   
-class Data:
+class Database:
 
     database='mtim'
 

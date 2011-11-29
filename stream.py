@@ -2,6 +2,8 @@
 ## Stream object
 
 import string
+
+debug=True
 trace=False
 
 
@@ -142,11 +144,18 @@ class InstanceList:
         else:
             self.objects.add(instance)
             
+    def remove(self,instance):
+        if isinstance(instance, InstanceList):
+            for o in instance:
+                self.objects.remove(o)
+        else:
+            self.objects.remove(instance)
+            
     def single(self):
         '''
         Convert into a single Instance
         '''
-        assert len(self.objects)==1
+        assert len(self.objects)==1 ## More than one object returned
         return self.objects.pop()
             
     def setTag(self,tag,value=True):
@@ -216,11 +225,20 @@ class InstanceList:
 
 
 class Connection:
-    def __init__(self,name):
+    def __init__(self,name,source=None,sink=None):
         self.name=name
         self.output=[]
         self.input=[]
         self._send={}
+
+        if name is None:
+            assert source and sink ## source and sink required for auto naming
+            self.name="%s-%s" % (source._name,sink._name)
+        ## optional auto connect.
+        if source is not None:
+            self.addIn(source)
+        if sink is not None:
+            self.addOut(sink)
         
     def addOut(self,sink):
         assert sink not in self.output ## Adding sink twice
@@ -273,9 +291,8 @@ class Connection:
     
 class Stream:
 
-    ## Options
-    _plot=None
-    
+    _plot=False
+
     def __init__(self,name,*args,**kwargs):
         self._name=name             # name of stream.
         self._input=InstanceList()  # list of input objects
@@ -292,11 +309,6 @@ class Stream:
         self._wave=0            # last seen wave number
 
         self._run=False         # stream running (start complete)
-        
-        self._plotdata={}       # name:(color,plotdata)
-        self._plotname=[]       # plot order
-        self._plottime=[]       # time axis
-
         self._init(*args,**kwargs)
         
     def __str__(self):
@@ -315,18 +327,19 @@ class Stream:
         return string.join(output)
     
     def _missing(self):
-        result=[]
+        missing=[]
         for i in self._input:
             if self._previousIn[i] is None:
-                result.append(i)
-        return result
+                missing.append(i)
+        return missing
     
     def _recv(self,value):
-        #if self._run:
-        #    print "Strem.recv>",self._name, value, self._wave, value.time-self._last
+        if trace and self._run:
+            print "Strem.recv>",self._name, value, self._wave, value.time, self._last and (value.time-self._last)
 
         ## In startup mode (logic closely mirrors run)    
         if not self._run:
+            #print "Stream.recv>", self, value
             for i in self._input:
                 ## Check if incomplete if so set value and return.
                 if self._previousIn[i] is None:
@@ -365,9 +378,6 @@ class Stream:
         ## Computation
         self._compute(value,deltasec)
         
-        if self._plot:
-            self._plotValues(value.time)
-
         ## Done. update previous input 
         self._previousIn[value.var]=value.value
 
@@ -381,11 +391,9 @@ class Stream:
                 self._send(o,v) ## send changed value to connections
                 self._previousOut[o]=v
         
-
     def _send(self,obj,value):
         for c in self._connections:
             c.send(Value(obj,value,self._last,self._wave+1)) ## send value to connections
-        
                 
     def _addName(self,name,var,value=None):
         if name is None:
@@ -403,25 +411,6 @@ class Stream:
         self._addName(name,var)
         self._output.add(var)
         self._previousOut[var]=None
-
-    def _plotValues(self,time):
-        self._plottime.append(time)
-        for name,(color,data) in self._plotdata.iteritems(): #@UnusedVariable
-            value=getattr(self,name)
-            data.append(value)
-        
-    def _addPlot(self,name,color):
-        self._plotname.append(name)
-        self._plotdata[name]=(color,[])
-
-    def _values(self):
-        '''
-        Returns the values in order
-        '''
-        result=[]
-        for n in self._names:
-            result.append(getattr(self,n))
-        return result
 
     ## Default subclass methods
     
@@ -449,4 +438,3 @@ class Stream:
         '''
         return True
 
-        
