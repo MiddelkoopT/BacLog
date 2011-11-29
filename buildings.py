@@ -8,43 +8,43 @@ tags={'STEAM':'steam', 'STM':'steam', 'CHW':'chw', 'HHW':'hhw', 'APPLICATION':'a
 
 class Building:
 
-    def tag(self,objects):
-        self._replace(objects) ## string replace
-        for o in objects:
+    def tag(self,instances):
+        self._replace(instances) ## string replace
+        for o in instances:
             self._tag(o)
         self._fix()
         
-    def check(self,objects):
+    def check(self,instances):
         ## QC check 
-        print "untagged", objects.getTagsNot(['room','corridor','closet','mechanical','ahu','pump'])
-        print '!descriptor',objects.getTagNot('descriptor')
+        print "untagged", instances.getTagsNot(['room','corridor','closet','mechanical','ahu','pump'])
+        print '!descriptor',instances.getTagNot('descriptor')
 
-        print "!building", objects.getTagNot('building')
-        print '!vav',objects.getTagsNot(['room','corridor','closet','mechanical']).getTag('vav')
-        print '!space',objects.getTagNot('space').getTag('vav')
-        print "!unit", objects.getTagNot('unit')
+        print "!building", instances.getTagNot('building')
+        print '!vav',instances.getTagsNot(['room','corridor','closet','mechanical']).getTag('vav')
+        print '!space',instances.getTagNot('space').getTag('vav')
+        print "!unit", instances.getTagNot('unit')
         
         ## Verify VAV box names
-        for unit in objects.getValues('unit'):
-            r=objects.getTags({'unit':unit,'application':True})
+        for unit in instances.getValues('unit'):
+            r=instances.getTags({'unit':unit,'application':True})
             if len(r)>1:
                 print "duplicate unit", r
 
-        for space in objects.getValues('space'):
-            r=objects.getTags({'space':space,'application':True})
+        for space in instances.getValues('space'):
+            r=instances.getTags({'space':space,'application':True})
             if len(r)>1:
                 print "duplicate space", r
 
-        for vav in objects.getValues('vav'):
-            r=objects.getTags({'vav':vav,'application':True})
+        for vav in instances.getValues('vav'):
+            r=instances.getTags({'vav':vav,'application':True})
             if len(r)>1:
                 print "duplicate vav", r
          
     ## Default methods
     replaceUnits=[]
-    def _replace(self,objects):
+    def _replace(self,instances):
         for s,r in self.replaceUnits:
-            for o in objects:
+            for o in instances:
                 name=string.replace(o.name,s,r)
                 if name!=o.name:
                     o.setTag('fixed',s)
@@ -64,70 +64,77 @@ class PughHall(Building):
                   ('PMPMROOM.VAV104','ROOMTRO1A.VAV104'),  # (R)
                    ]         
     
-    def _tag(self,object):
-        name=object.name
+    def _tag(self,instance):
+        name=instance.name
         
         ## Building
         for r in re.finditer('^B(\d+)[\._:]', name):
-            object.setTag('building',int(r.group(1)))
+            instance.setTag('building',int(r.group(1)))
             
         ## Derive unit and descriptor/address from name
         for r in re.finditer('^B\d+[\._]([A-Z\d_\.]+)([:-]([A-Z\d \.-]+))?$', name):
-            object.setTag('unit',r.group(1))
+            instance.setTag('unit',r.group(1))
             if r.group(2):
-                object.setTag('descriptor',r.group(3))
+                instance.setTag('descriptor',r.group(3))
 
         ## Room (rooms can have letters in them!)
         for r in re.finditer('[\._]ROOM(\d+\w*)[\._]', name):
-            object.setTag('room',r.group(1))
-            object.setTag('space',r.group(1))
+            instance.setTag('room',r.group(1))
+            instance.setTag('space',r.group(1))
         
         ## Find Corridor
         for r in re.finditer('[\._](C\d+\w*)[\._]', name):
-            object.setTag('corridor',r.group(1))
-            object.setTag('space',r.group(1))
+            instance.setTag('corridor',r.group(1))
+            instance.setTag('space',r.group(1))
 
         ## Find Telcom
         for r in re.finditer('[\._]ROOM(TRO\d+\w*)[\._]', name):
-            object.setTag('closet',r.group(1))
-            object.setTag('space',r.group(1))
+            instance.setTag('closet',r.group(1))
+            instance.setTag('space',r.group(1))
             
         ## AHU and other numbered units
         for r in re.finditer('[\._](AHU|VAV|VFD)(\d+)', name):
             tag=string.lower(r.group(1))
-            object.setTag(tag,int(r.group(2)))
+            instance.setTag(tag,int(r.group(2)))
             
         ## Find pump VFD's
         for r in re.finditer('[\._]PMP[\._](\d+)[\._]VFD', name):
-            object.setTag('pump',r.group(1))
-            object.setTag('vfd')
+            instance.setTag('pump',r.group(1))
+            instance.setTag('vfd')
             
         ## Find any pump
         for r in re.finditer('[\._](CHW|HHW)?PMP(\d+)[\._:-]', name):
-            object.setTag('pump',int(r.group(2)))
-            object.setTag(string.upper(r.group(1)))
+            instance.setTag('pump',int(r.group(2)))
+            instance.setTag(string.upper(r.group(1)))
             
         ## Add material tag
         for r in re.finditer("[\._](%s)" % string.join(tags.keys(),'|'), name):
-            object.setTag(tags[r.group(1)])
+            instance.setTag(tags[r.group(1)])
             
         ## Tag keywords after : or -
         for r in re.finditer('[:-](APPLICATION)$', name):
-            if object.instance % 100 == 2:
-                object.setTag(tags[r.group(1)])
+            if instance.oinstance % 100 == 2:
+                instance.setTag(tags[r.group(1)])
                 
-        ## FLN devices are spaced by 100 > 10000
-        if object.instance >= 10000:
-            object.setTag('module',object.instance/100)
-            object.setTag('address',object.instance%100)
+        ## FLN devices are spaced by 100 >= 10000
+        if instance.oinstance >= 10000:
+            instance.setTag('module',instance.oinstance/100)
+            instance.setTag('address',instance.oinstance%100)
+        
+        ## MEC I/O < 10000
+        if instance.oinstance < 10000:
+            for r in re.finditer('^B\d+[\._]([A-Z\d_\.]+)([\.]([A-Z\d \.-]+))?$', name):
+                instance.setTag('unit',r.group(1))
+                if r.group(2):
+                    instance.setTag('descriptor',r.group(3))
             
         #### Derived information
         
         ## ahu zone
-        if object.hasTag('ahu'):
-            object.setTag('zone',object.getTag('ahu'))
+        if instance.hasTag('ahu'):
+            instance.setTag('zone',instance.getTag('ahu'))
 
         ## vav zone Zxx, where z is the zone
-        if object.hasTag('vav'):
-            vav=object.getTag('vav')
-            object.setTag('zone',vav/100)
+        if instance.hasTag('vav'):
+            vav=instance.getTag('vav')
+            instance.setTag('zone',vav/100)

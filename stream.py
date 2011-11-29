@@ -13,17 +13,17 @@ class Instance:
     
     def __init__(self,_device,_type,_instance):
         self.device=_device
-        self.type=_type
-        self.instance=_instance
+        self.otype=_type
+        self.oinstance=_instance
         self._hash=hash((_device,_type,_instance))
         
     def __setattr__(self,name,value):
-        if name in ('device','type','instance','_hash') and getattr(self,name,None) is not None:
+        if name in ('device','otype','oinstance','_hash') and getattr(self,name,None) is not None:
             raise Exception('attempt to change read only definition')
         self.__dict__[name]=value
         
     def __repr__(self):
-        output=["<%s,%s,%s" % (self.device,self.type,self.instance)]
+        output=["<%s,%s,%s" % (self.device,self.otype,self.oinstance)]
 
         if self.name is not None:
             output.append("|%s:%s" % (self.tags.get('unit'),self.tags.get('descriptor')))
@@ -48,7 +48,7 @@ class Instance:
         return self._hash
     
     def __eq__(self,other):
-        return self.device==other.device and self.type==other.type and self.instance==other.instance
+        return self.device==other.device and self.otype==other.otype and self.oinstance==other.oinstance
 
     def setTag(self,name,value=True):
         if self.tags is None: self.tags={} 
@@ -65,7 +65,7 @@ class Instance:
     
     def getTags(self):
         return self.tags.keys()
-
+    
 
 class Variable:
     
@@ -73,12 +73,12 @@ class Variable:
         self.name=name
         self.source=source
         if source:
-            self._hash=hash((source.device,source.type,source.instance,name))
+            self._hash=hash((source.device,source.otype,source.oinstance,name))
         else:
             self._hash=hash(name)
 
     def __setattr__(self,name,value):
-        if name in ('device','type','instance','_hash') and getattr(self,name,None) is not None:
+        if name in ('device','otype','oinstance','_hash') and getattr(self,name,None) is not None:
             raise Exception('attempt to change read only definition')
         self.__dict__[name]=value
         
@@ -90,6 +90,10 @@ class Variable:
     
     def __repr__(self):
         return "%s:%s" % (self.source,self.name)
+    
+    ## chain queries to source
+    def getTag(self,tag):
+        return self.source.getTag(tag)
         
 
 class Value:
@@ -358,7 +362,9 @@ class Stream:
         self._last=value.time
         deltasec=delta.days*(1440) + delta.seconds+delta.microseconds/1000000.0
 
-        self._compute(deltasec)
+        ## Computation
+        self._compute(value,deltasec)
+        
         if self._plot:
             self._plotValues(value.time)
 
@@ -417,7 +423,7 @@ class Stream:
             result.append(getattr(self,n))
         return result
 
-    ## Default subscription methods
+    ## Default subclass methods
     
     def _register(self,var):
         '''

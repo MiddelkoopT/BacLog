@@ -1,8 +1,6 @@
 ## BacLog Copyright 2011 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Analysis Data
 
-from datetime import datetime, timedelta, tzinfo
-
 import psycopg2
 from stream import Instance, InstanceList
   
@@ -34,7 +32,7 @@ class Data:
             if description != None or description != '':
                 o.description=description
             objects.add(o)
-            self.object[(o.device,o.type,o.instance)]=o
+            self.object[(o.device,o.otype,o.oinstance)]=o
         cur.close()
         return objects
     
