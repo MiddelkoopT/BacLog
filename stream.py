@@ -307,6 +307,7 @@ class Stream:
         self._previousOut={}    # var:previous_value
         self._last=None         # last update for delta
         self._wave=0            # last seen wave number
+        self._check=True        # consistancy checking
 
         self._run=False         # stream running (start complete)
         self._init(*args,**kwargs)
@@ -356,10 +357,11 @@ class Stream:
             self._run=True
             
         ## Consistency check
-        if value.time<self._last:
-            print self._last, value.time, value  ## asserts on next line
-        assert value.time>=self._last                           ## data out of order
-        assert value.time>self._last or value.wave>=self._wave  ## data out of order 
+        if self._check:
+            if value.time<self._last:
+                print self._last, value.time, value  ## asserts on next line
+            assert value.time>=self._last                           ## data out of order
+            assert value.time>self._last or value.wave>=self._wave  ## data out of order 
 
         ## Run mode (closely mirrors startup)
 

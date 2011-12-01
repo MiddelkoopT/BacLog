@@ -33,7 +33,7 @@ class AHU(Stream):
         pass
 
 
-class Zone(Stream):
+class VAV(Stream):
     _monitor=[
               # VAV
               ('AUX TEMP','sa'),
@@ -49,6 +49,7 @@ class Zone(Stream):
             var=vav.getTag('descriptor',descriptor).single()
             var.name=name
             self._addIn(var,name)
+            self._addOut(var,name) # Debug
 
         ## AHU input
         self._addIn(ahu.getTag('descriptor','RAIR-H').single(),'rh')
@@ -58,7 +59,7 @@ class Zone(Stream):
         app=vav.getTag('application').single()
         self._addOut(Variable('f',app),'f')
         self._addOut(Variable('q',app),'q')
-        
+                
         ## cache vav.
         self.vav=app.getTag('vav')
 
@@ -72,7 +73,7 @@ class Zone(Stream):
          * no losses in ducts.
         '''
 
-        #print "Zone.compute>"
+        #print "VAV.compute>"
         self.f=self.pf*self.mf
         self.q=self.f*4.5*( hvac.h(self.sa,self.rh) - hvac.h(self.sat,self.rh) )
         #print "Plot.compute>", self.vav, self.sat, self.sa, self.f, self.rh, self.q
@@ -130,8 +131,8 @@ class Data(Stream):
 class Plot(Stream):
     
     def _init(self):
-        
         self._plot=Series(self._name)
+        self._check=False ## allow out-of-order processing
 
     def _register(self,var):
         print "Plot.register>", var
@@ -166,12 +167,14 @@ class Analysis:
         
         ## Compute streams
         data=Data('data')
+        vav={}
+        ahu={}
         total={}
         plot=Plot("plot")
         
         ## Connections 
         source=Connection('source') # data connection
-        dest={} ## Zone connections
+        dest={} ## VAV connections
         output=Connection("output")
         
         ## Connect
@@ -179,25 +182,31 @@ class Analysis:
 
         ## Build network
         ahus=[1,3]
-        for ahu in ahus:
-            zone=objects.getTag('zone',ahu) ## All zone objects (VAV and AHU)
+        for ah in ahus:
+            zone=objects.getTag('zone',ah) ## All zone objects (VAV and AHU)
             data.addOut(zone)
             
             vavs=zone.getValues('vav')
-            total[ahu]=Total("total%d" % ahu,vavs)
-            dest[ahu]=Connection("dest%d" % ahu)
-            dest[ahu].addOut(total[ahu]) ## zone totalizer
+            total[ah]=Total("total%d" % ah,vavs)
+            dest[ah]=Connection("dest%d" % ah)
+            dest[ah].addOut(total[ah]) ## zone totalizer
 
-            a=AHU("ahu%d" % ahu, ahu,objects.getTag('ahu',ahu))
+            a=AHU("ahu%d" % ah, ah,objects.getTag('ahu',ah))
+            ahu[ah]=a
             source.addOut(a)
 
             for v in vavs:
-                z=Zone(('zone%d-VAV%s') % (ahu,v),zone.getTag('vav',v), objects.getTag('ahu',ahu)) ## Zone stream
-                source.addOut(z)
-                dest[ahu].addIn(z)
+                zv=VAV(('zone%d-VAV%s') % (ah,v), zone.getTag('vav',v), objects.getTag('ahu',ah)) ## Zone stream
+                vav[v]=zv
+                source.addOut(zv)
+                dest[ah].addIn(zv)
 
             ## Per ahu plots
-            output.addIn(total[ahu])
+            output.addIn(total[ah])
+
+        ## add trace points
+        output.addIn(ahu[1])
+        output.addIn(vav[114])
 
         ## connect plot (last)
         output.addOut(plot)
@@ -209,9 +218,10 @@ class Analysis:
             print "Analysis.run>", repr(plot)
 
         ## Process DataStream
-        limit="WHERE time >= '2011-09-27 20:00' AND time <= '2011-09-27 23:00'"
+        #limit="WHERE time >= '2011-09-27 20:00' AND time <= '2011-09-27 23:00'"
         #limit="WHERE time >= '2011-09-27 20:00' AND time <= '2011-09-28 07:00'"
-        #limit=None
+        #limit="WHERE time >= '2011-09-27' AND time <= '2011-09-29'"
+        limit=None
         
         ## Debug
         monitor=InstanceList()
@@ -222,11 +232,9 @@ class Analysis:
 
         #monitor.add(objects.getTags({'vav':114,'descriptor':'CTL TEMP'}))
         #monitor.add(objects.getTags({'vav':114,'descriptor':'FLOW'}))
-        #monitor.add(objects.getTags({'vav':114,'descriptor':'HTG LOOPOUT'}))
+        monitor.add(objects.getTags({'vav':114,'descriptor':'HTG LOOPOUT'}))
         #monitor.add(objects.getTags({'vav':114}))
 
-        #monitor=InstanceList() ## Disable monitoring
-        
         ## Stream compute
         i=0;
         for time,device,otype,oinstance,value in db.getData(limit):
@@ -235,16 +243,17 @@ class Analysis:
             
             ## Debug
             if v.var in monitor:
-                if v.value!=0:
-                    print "DATA:", time, v
-            
-            ## Tick
+                print "DATA:", time, v
             if i%100000==0:
                 print "TICK:", i,time
             i+=1
         
         ## Plot
-        graph.add(plot)
+        #limit=None
+        #limit=['total1-qsum','total3-qsum']
+        limit=['sat','sa']
+
+        graph.add(plot,limit)
         graph.run()
 
 

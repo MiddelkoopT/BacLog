@@ -25,7 +25,7 @@ class Line():
         
 
 class Series():
-    _color=0 ## auto increment colors
+    _color=10 ## auto increment colors
     _colors=color_table.keys()
     
     def __init__(self,name):
@@ -47,13 +47,13 @@ class Series():
 
 class Graph(HasTraits):
     plot=None
-    traits_view=View(Item('plot',editor=ComponentEditor(), show_label=False),
+    traits_view=View(Item('plot',editor=ComponentEditor(bgcolor="white"), show_label=False),
                      width=1200, height=1024, resizable=True, title="BacLog")
     
     def __init__(self):
         super(Graph,self).__init__()
+        self.container = HPlotContainer(padding=20, bgcolor="transparent")
         self.plot_area = OverlayPlotContainer(border_visible=True)
-        self.container = HPlotContainer(padding=50, bgcolor="transparent")
 
     def add(self,series,limit=None):
         
@@ -70,8 +70,10 @@ class Graph(HasTraits):
 
             axis = PlotAxis(orientation="left", resizable="v",
                             mapper = plot.y_mapper,
-                            bgcolor="transparent",
+                            bgcolor="white",
                             title = name,
+                            title_color = line.color,
+                            title_spacing = -4.0,
                             border_visible = True,)
             ## Visual style
             axis.bounds = [60,0]
