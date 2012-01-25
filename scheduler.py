@@ -139,10 +139,14 @@ class Scheduler:
 class Task:
     tid=0
     scheduler=Scheduler() ## Global default scheduler
-    def __init__(self):
+    def __init__(self,*args):
         Task.tid+=1
         self.tid=Task.tid
+        self.init(*args)
         self.send=self.run().send ## create coroutine link send() 
+
+    def init(self):
+        pass
 
     def run(self):
         assert False ## Run not implemented in subclass

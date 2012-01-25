@@ -1,6 +1,7 @@
 ## BacLog Copyright 2010 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Database Driver
 
+import types
 import time
 import psycopg2.extras
 from scheduler import Task
@@ -56,6 +57,7 @@ class DatabaseHandler:
 
         ## Database
         self.conn=psycopg2.connect(database=database,async=1)
+        if debug: print "DatabaseHandler>", self.conn
         psycopg2.extras.wait_select(self.conn) ## Block; connections are expensive anyways.
         self.cur=self.conn.cursor() ## Private handler cursor
         self.socket=self.conn.fileno()
@@ -177,10 +179,12 @@ class GetDevices(Task):
 ## Insert Queries (basic)
 
 class Log(Query):
-    def __init__(self,stamp,IP,port,type,instance,value,status=None,objectID=None):
+    def __init__(self,stamp,IP,port,otype,oinstance,value,status=None,objectID=None):
         query="INSERT INTO Log (time,IP,port,type,instance,value,status,objectID) VALUES (%s,%s,%s,%s,%s,%s,%s,%s);"
         stamp=psycopg2.TimestampFromTicks(stamp)
-        Query.__init__(self,query, stamp,IP,port,type,instance,value,status,objectID)
+        if type(value)==types.BooleanType:
+            value=1 if value else 0
+        Query.__init__(self,query, stamp,IP,port,otype,oinstance,value,status,objectID)
 
 class Object(Query):
     def __init__(self,deviceID,type,instance,name,description=None,pointID=None):

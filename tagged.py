@@ -15,7 +15,8 @@ SEP="\n"
 
 ## PhaseII Data types
 class Tagged:
-    #_value=None
+    _value=None
+    
     def __init__(self,*args,**kwargs):
         '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
         #print "Tagged> %s " % self.__class__, args, kwargs
@@ -113,11 +114,14 @@ class Tagged:
 
     ## Default methods (should do the right thing)
     def _init(self):
-        '''Default init does nothing'''
+        '''
+        Setup the object.
+        '''
         pass
     
     def _set(self,value):
-        '''Default set just passes value to self._value'''
+        '''Set the value of _value during object construction'''
+        #if debug: print "Tagged.set>", self.__class__, value
         self._value=value
 
     def _decode(self,data):
@@ -195,8 +199,34 @@ class Float(Tagged):
 
 class Boolean(Tagged):
     _format='B'
+    _num=1 ## Application tag (Boolean encoded as application differently)
+    
+    def _encode(self,tagnum=None):
+        assert tagnum==None ## only encode as application supported.
+        assert self._value is not None ## Boolean value not set
+        tag=self._setTag(0x1,0,0x01 if self._value else 0x00)
+        return tag
+
+    def _decode(self, data):
+        num,cls,lvt=self._getTag() #@UnusedVariable
+        assert cls==0 ## Only Application decoding supported
+        if cls==0:
+            assert num==1 ## application tag.
+            if lvt==0x00:
+                self._value=False
+            elif lvt==0x01:
+                self._value=True
+            else:
+                assert False ## Invalid Boolean encoding
+        #print "Boolean.decode>", self._value
+
     def __repr__(self):
-        return ['<False>','<True>'][self._value]
+        if self._value==True or self._value==1:
+            return '<True>'
+        elif self._value==False or self._value==0:
+            return '<False>'
+        else:
+            return '<None>'
 
 class String(Tagged):
     def _encode(self):
@@ -287,6 +317,10 @@ class ObjectIdentifier(Tagged):
             _type=bacnet.ObjectType._enumeration[_type]
         self.type=_type
         self.instance=_instance
+        self._value=(self.type,self.instance)
+        
+    def __hash__(self):
+        return hash((self.type,self.instance))
         
     def __repr__(self):
         return "<%s,%d>" % (bacnet.ObjectType._display[self.type],self.instance)
@@ -298,7 +332,7 @@ class ObjectIdentifier(Tagged):
 class Application(Tagged):
     _application=[
                   None,             # [A0] NULL
-                  None,             # [A1] Boolean
+                  Boolean,          # [A1] Boolean
                   Unsigned,         # [A2] Unsigned
                   None,             # [A3] Integer
                   Float,            # [A4] Float
@@ -319,14 +353,17 @@ class Application(Tagged):
         #print "Application>", num, DataClass
         element=DataClass(data=data,tag=tag)
         self._value=element
-        self.value=element._value
         #print "Application.decode>", element._value
 
         if opentag!=False:
             self._getCloseTag(data,opentag)
-
+            
+    def _encode(self,tagnum=None):
+        assert tagnum==None ## Only encode as an application
+        return self._value._encode()
+            
     def __repr__(self):
-        return "<(%s)>" % self.value
+        return "{%s}" % self._value
 
 class Property(Tagged):
     '''
@@ -336,14 +373,18 @@ class Property(Tagged):
     _identifier=None
     _propertymap=None ## delayed initialization
     _type=Application ## default type
+    
     def _set(self,property,*value):
         self._identifier=property
-        self._type=self._propertymap.get(property._value,None)  or self._type
+        self._type=self._propertymap.get(property._value,None) or self._type
         self._value=self._type(*value)
         if debug: print "Property.init>", property, self._type
         
+    def Add(self,*value):
+        return self._value.Add(*value)
+                
     def _decode(self,data):
-        ## remove context open tag for non Application,Array, and SequenceOf tags (they consume them)
+        ## remove context open tag for non Application, Array, and SequenceOf tags (they consume them)
         ## consider adding a self._opentag to Tagged to indicate consumption of open/close tag.
         opentag=self._openTag()
         if opentag!=False and (not issubclass(self._type, (Application,Array,SequenceOf))):
@@ -354,14 +395,29 @@ class Property(Tagged):
         self._value=self._type(data=data,tag=self._getTag())
         if opentag!=False:
             self._getCloseTag(data, opentag)
-        
+            
     def _encode(self,tagnum=None):
         if debug: print "Property.encode>", tagnum, self._identifier, self._type
         return self._setOpenTag(tagnum)+self._value._encode()+self._setCloseTag(tagnum)
-                
+    
+    def __getitem__(self,index):
+        '''
+        Get property at index.
+        Return a single item as a property (provides context) using the parent property._identifier        
+        '''
+        assert isinstance(self._value, Array)
+        item=Property(self._identifier)
+        item._value=self._value[index]
+        return item
+        
+    def __len__(self):
+        assert isinstance(self._value, Array)
+        return len(self._value) ## peak into array directly
+    
     def __repr__(self):
+        assert self._identifier is not None ## test
         if self._identifier==None:
-            return str(self._value)
+            return repr(self._value)
         return "%s=%s" % (self._identifier, self._value)
 
 ## Composite types
@@ -492,6 +548,11 @@ class SequenceOf(Tagged):
 
 class Array(Tagged):
     _type=None
+
+    def _init(self):
+        #print "Array.init>"
+        self._value=[]
+        
     def _decode(self,data):
         opentag=self._openTag()
         #print "Array.decode> ===========", opentag
@@ -502,9 +563,24 @@ class Array(Tagged):
             self._value.append(item)
             #print "Array.decode>", item
         #print "Array.decode> -----------", opentag
+        
+    def _encode(self,tagnum=None):
+        encoded=[]
+        for element in self._value:
+            encoded.append(element._encode())
+        return string.join(encoded,'')
+
+    def Add(self,*value):
+        #print "Array.add>", self.__class__, value
+        item=self._type(*value)
+        self._value.append(item)
+        return item
 
     def __getitem__(self,index):
         return self._value[index]
+    
+    def __len__(self):
+        return len(self._value)
 
     def __iter__(self):
         return self._value.__iter__()

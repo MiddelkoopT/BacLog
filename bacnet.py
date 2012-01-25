@@ -163,6 +163,8 @@ class ReadProperty(ConfirmedServiceRequest):
                ('property',PropertyIdentifier), # [1] propertyIdentifier
                ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
                ]
+    index=None
+    
     def _set(self,property=None,object=None,objectInstance=None,index=None):
         '''ReadProperty convience constructor'''
         if property!=None and object!=None:
@@ -170,8 +172,7 @@ class ReadProperty(ConfirmedServiceRequest):
             if objectInstance!=None:
                 object=ObjectIdentifier(object,objectInstance)
             self.object=object
-        if index!=None:
-            self.index=index
+        self.index=index
 
 class PropertyReference(Sequence):
     _sequence=[
@@ -248,6 +249,7 @@ PropertyMap={
              'APDUSegmentationTimeout':Unsigned,
              'APDUTimeout':Unsigned,
              'APDURetries':Unsigned,
+             'description':String,
              }
 
 
@@ -256,7 +258,7 @@ ConfirmedServiceChoice=tagged.buildServiceChoice(ConfirmedServiceRequest,vars())
 ConfirmedServiceResponseChoice=tagged.buildServiceChoice(ConfirmedServiceACK,vars()) 
 UnconfirmedServiceChoice=tagged.buildServiceChoice(UnconfirmedServiceRequest,vars()) 
 
-## Idexed by PDU type
+## Indexed by PDU type
 ServiceChoice=[ConfirmedServiceChoice,UnconfirmedServiceChoice]
 
 ## Generate derived attributes.

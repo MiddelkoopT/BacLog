@@ -9,7 +9,7 @@ import packet
 import bacnet
 import scheduler
 
-
+info=False
 debug=False
 trace=False
 
@@ -100,7 +100,7 @@ class MessageHandler:
         for invoke,timeout in self.timeout.items():
             if self.time-timeout > 0:
                 tid,work=self.wait[invoke]
-                print "MessageHandler.process> timeout:", invoke, tid, work.request
+                if info: print "MessageHandler.process> timeout:", invoke, tid, work.request
                 del self.timeout[invoke]
                 self.put(work) ## resend
     

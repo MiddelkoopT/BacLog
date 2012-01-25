@@ -20,7 +20,7 @@ from message import Message
 
 info=True
 debug=True
-trace=False
+trace=True
 
 class Ping(Task):
     def run(self):
@@ -35,9 +35,9 @@ class GetPresentValue(Task):
             request=bacnet.ReadProperty('presentValue',o.objectIdentifier)
             response=yield Message(self.target.address,request)
             m=response.message
-            if debug: print "GetPresentValue> value:", m.value.value
-            response=yield database.Log(response.remote[0],response.remote[1],
-                                        m.object.type,m.object.instance,m.value.value)
+            if debug: print "GetPresentValue> value:", m.value._value._value
+            response=yield database.Log(response.stamp,response.remote[0],response.remote[1],
+                                        m.object.type,m.object.instance,m.value._value._value)
 
 
 class SubscribeCOV(Task):
@@ -103,7 +103,7 @@ class FindObjects(Task):
                 response=yield Message(target.address,bacnet.ReadProperty('objectName',o))
                 name=response.message.value._value
                 response=yield Message(target.address,bacnet.ReadProperty('description',o))
-                description=response.message.value.value
+                description=response.message.value._value
                 if debug: print "FindObjects> name:", name, description
                 response=yield database.Object(deviceID,o.type,o.instance,name,description)
                 objectID,=response.pop()
@@ -150,11 +150,12 @@ class BacLog:
         ## Setup scheduler
         scheduler=self.scheduler
         device=config.getint('Network','device')
+        name=config.get('Network','name')
         
         ## Object Discovery
         
         bootstrap=config.getboolean('Options','bootstrap')
-        if not bootstrap:
+        if bootstrap==False:
             ## Configure operation using scheduler task GetDevices
             task=database.GetDevices()
             self.scheduler.add(task)
@@ -187,15 +188,12 @@ class BacLog:
         ## Configure Device
         print "BacLog.run> configure"
 
-        property=service.ReadProperty()
-        property.device=device
-        property.name=config.get('Network','name')
+        table=service.InstanceTable(device,name)
+        property=service.ReadProperty(table)
         scheduler.add(property)
         self.mh.addService(property, bacnet.ReadProperty)
 
-        properties=service.ReadPropertyMultiple()
-        properties.device=device
-        properties.name='BacLog'
+        properties=service.ReadPropertyMultiple(table)
         scheduler.add(properties)
         self.mh.addService(properties,bacnet.ReadPropertyMultiple)
 
@@ -226,7 +224,6 @@ class BacLog:
 
     def shutdown(self):
         self.scheduler.shutdown()
-        exit()
 
 if __name__=='__main__':
     print "BacLog> start"
