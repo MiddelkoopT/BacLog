@@ -109,31 +109,34 @@ class COV(Task):
         self.subscribe={}
         
     def run(self):
-        ack=yield None
-        for i in range(0,100):
-            #ping=yield scheduler.Wait(1)
-            for o,(request,v) in self.subscribe.items():
-                v._value=not v._value ## boolean only!
-                p=self.table[o]
+        for i in range(0,10):
+            yield scheduler.Wait(1)
+            for j in range(0,10):
+                for o,(request,v) in self.subscribe.items():
+                    print "COV>",i,j,o
+                    v._value=not v._value ## boolean only!
+                    ack=yield self.cov(o,request,v)
+                    assert ack==True
 
-                values=bacnet.SequenceOfPropertyValue()
-                pv=values.Add()
-                pv.property=p.presentValue._identifier
-                pv.value=p.presentValue
-                
-                pv.index=None ## set optional: don't like (from New)!
-                pv.priority=None
-                
-                cov=bacnet.UnconfirmedCOVNotification()
-                cov.pid=request.message.spid._value
-                cov.device=self.device.objectIdentifier._value
-                cov.object=o
-                cov.time=0 ## TODO: unimplemented
-                cov.values=values
-                
-                print "COV>",i,cov
-                ack=yield Message(request.remote,cov,confirmed=False)
-                print "COV>",i,ack
+    def cov(self,o,request,v):
+        p=self.table[o]
+        values=bacnet.SequenceOfPropertyValue()
+        pv=values.Add()
+        pv.property=p.presentValue._identifier
+        pv.value=p.presentValue
+        
+        pv.index=None ## set optional: don't like (from New)!
+        pv.priority=None
+        
+        cov=bacnet.UnconfirmedCOVNotification()
+        cov.pid=request.message.spid._value
+        cov.device=self.device.objectIdentifier._value
+        cov.object=o
+        cov.time=0 ## TODO: unimplemented
+        cov.values=values
+        
+        print "COV>",cov.pid,cov.device
+        return Message(request.remote,cov,confirmed=False)
 
 
 class SubscribeCOV(Task):

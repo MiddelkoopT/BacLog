@@ -25,10 +25,13 @@ class Packet:
         ## APDU header
         self._add('_pdu','B',pdu)           # (pdutype<<4 | pduflags)
         
+        ## Defaluts (nice)
+        self.invoke=None
+        
         ## Process data and update fields
         data and self._decode(data)
         self._update()
-
+        
     def _update(self):        
         '''Set computed fields. (pdutype, pduflags)'''
         if(self._pdu!=None):

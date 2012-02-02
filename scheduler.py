@@ -108,7 +108,7 @@ class Scheduler:
             
             ## Pair responses
             for h in self.handler:
-                while h.recv:
+                while h.recv():
                     work=h.get()  ## Handlers do the paring.
                     if work:
                         self.done.append(work)

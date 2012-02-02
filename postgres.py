@@ -52,8 +52,8 @@ class DatabaseHandler:
         if trace: print "DatabaseHandler>", database
         
         ## Handler API
-        self.send=[]
-        self.recv=[]
+        self._send=[]
+        self._recv=[]
 
         ## Database
         self.conn=psycopg2.connect(database=database,async=1)
@@ -75,15 +75,15 @@ class DatabaseHandler:
     ## Handler API
         
     def put(self,work):
-        if debug: print "DatabaseHandler.put>", len(self.send), work.tid, work.request.query
-        if self.send and len(self.send)%50==0: print "DatabaseHandler.put> queue", len(self.send)
+        if debug: print "DatabaseHandler.put>", len(self._send), work.tid, work.request.query
+        if self._send and len(self._send)%50==0: print "DatabaseHandler.put> queue", len(self._send)
         
         ## Idle handler: start transaction
         if self.state==DatabaseHandler.IDLE: 
             self.cur.execute("BEGIN")
             self.state=DatabaseHandler.WAIT
         
-        self.send.append(work)
+        self._send.append(work)
 
     def reading(self):
         return self.conn.poll()==self.POLL_READ
@@ -104,7 +104,7 @@ class DatabaseHandler:
         ## State machine.
         if self.state==DatabaseHandler.WAIT:
             ## duplicate code in put()
-            self.work=self.send.pop()
+            self.work=self._send.pop()
             self.work.request.execute()
             self.state=DatabaseHandler.EXECUTE
             if self.conn.poll()!=self.POLL_OK:
@@ -125,16 +125,16 @@ class DatabaseHandler:
 
         if self.state==DatabaseHandler.CLOSE:
             self.state=DatabaseHandler.COMMIT
-            if not self.send: ## not empty so keep transaction open
+            if not self._send: ## not empty so keep transaction open
                 if trace: print "DatabaseHandler.process> commit"
                 self.cur.execute("COMMIT");
                 if self.conn.poll()!=self.POLL_OK:
                     return
         
         if self.state==DatabaseHandler.COMMIT:
-            self.recv.append(self.work) ## Data now available.
+            self._recv.append(self.work) ## Data now available.
             self.work=None ## Idle
-            if self.send: ## more data to process
+            if self._send: ## more data to process
                 self.state=DatabaseHandler.WAIT
                 return
             self.state=DatabaseHandler.IDLE
@@ -145,13 +145,14 @@ class DatabaseHandler:
     def write(self):
         pass
         
+    def recv(self):
+        return len(self._recv)>0
+        
     def get(self):
-        if len(self.recv)>1: print "DatabaseHandler.get> queue", len(self.recv)
-        if self.recv:
-            work=self.recv.pop()
-            if debug: print "DatabaseHandler.get>", len(self.recv), work.tid, work.response
-            return work 
-        return None
+        if len(self._recv)>1: print "DatabaseHandler.get> queue", len(self._recv)
+        work=self._recv.pop()
+        if debug: print "DatabaseHandler.get>", len(self._recv), work.tid, work.response
+        return work 
     
     def shutdown(self):
         self.cur.close()

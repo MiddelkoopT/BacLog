@@ -33,14 +33,15 @@ class MessageHandler:
     TIMEOUT=0.1
     def __init__(self, address, port):
         if debug: print "MessageHandler>", address, port
-        self.send=[]
-        self.recv=[]
+        self._send=[]
+        self._recv=[]
         self.socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.socket.bind((address,port))
         self.socket.setblocking(0)
         self.invoke=0
         self.wait={}
         self.timeout={}
+        self._done=[]
         self.sleep=0
         self.service=[[None]*16]*8  ## Service Table
         Message._handler=Message._handler or self
@@ -79,10 +80,10 @@ class MessageHandler:
             self.timeout[p.invoke]=self.time+timeout
 
         if debug: print "MessageHandler.put>", remote, p.invoke
-        self.send.append((remote,p._encode(request)))
+        self._send.append((remote,p._encode(request),work))
         
     def writing(self):
-        return len(self.send) > 0
+        return len(self._send) > 0
     
     def reading(self):
         return True
@@ -105,18 +106,31 @@ class MessageHandler:
                 self.put(work) ## resend
     
     def write(self):
-        remote,data=self.send.pop(0)
+        remote,data,work=self._send.pop(0)
         sent=self.socket.sendto(data, remote)
         assert sent==len(data) ## Send entire packet.
         if trace: print "MessageHandler.write>", remote
+        if work.request.confirmed==False:
+            self._done.append(work)
         
     def read(self):
         (recv,remote)=self.socket.recvfrom(1500)
-        self.recv.append((recv,remote,time.time()))
+        self._recv.append((recv,remote,time.time()))
         if trace: print "MessageHandler.read>", remote
         
+    def recv(self):
+        return self._recv or self._done
+        
     def get(self):
-        recv,remote,stamp=self.recv.pop(0)
+        ## Sent first.
+        if self._done:
+            work=self._done.pop(0)
+            work.response=True
+            if debug: print "MessageHandler.get>", work
+            return work
+        
+        ## Recv Next
+        recv,remote,stamp=self._recv.pop(0)
         ## Process BVLC/NPDU and start of APDU
         p=packet.Packet(data=recv)
         if trace: print "MessageHandler.get>", stamp, remote, p.pdutype, binascii.b2a_hex(recv)
