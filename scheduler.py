@@ -151,8 +151,8 @@ class Task:
     def run(self):
         assert False ## Run not implemented in subclass
         
-    def send(self):
-        assert False ## send should point to coroutine send()
+    def send(self,message):
+        assert False ## send should point to coroutine send(); Task.__init__ not called?
         
     def __repr__(self):
         return "Task[%s]:%d" % (self.__class__,self.tid)

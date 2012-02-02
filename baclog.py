@@ -47,7 +47,7 @@ class SubscribeCOV(Task):
             for o in self.target.objects:
                 if debug: print "SubscribeCOV>", o, self.target
                 subscribe=bacnet.SubscribeCOV()
-                subscribe.pid=self.pid
+                subscribe.spid=self.pid
                 subscribe.object=o.objectIdentifier
                 subscribe.confirmed=False
                 subscribe.lifetime=self.lifetime
@@ -119,8 +119,9 @@ class COVNotification(Task):
                 response=yield None
                 continue
             m=response.message
-            if debug: print "COVNotification>", m.object, m.values.presentValue.value._value.value
-            response=yield database.Log(response.stamp,response.remote[0],response.remote[1],m.object.type,m.object.instance,m.values.presentValue.value._value.value)
+            if debug: print "COVNotification>", m.object, m.values.presentValue._get()
+            response=yield database.Log(response.stamp,response.remote[0],response.remote[1],
+                                        m.object.type,m.object.instance,m.values.presentValue._get())
 
 
 #### Main Class
@@ -173,7 +174,7 @@ class BacLog:
         print "BacLog.run>", devices
         if trace:
             for d in devices:
-                print d.objects
+                print " ", d.objects
 
         ## Do an initial scan of values and exit
         if config.getboolean('Options','getinitialvalue'):

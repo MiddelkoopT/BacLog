@@ -2,7 +2,8 @@
 
 import tagged
 
-from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, String, ObjectIdentifier, Property, Enumerated, Bitstring, Sequence, SequenceOf, Array, Tagged
+from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, String 
+from tagged import ObjectIdentifier, Property, Enumerated, Bitstring, Sequence, SequenceOf, Array, Empty
 
 ## Data types
 class ObjectIdentifierArray(Array):
@@ -77,6 +78,9 @@ class PropertyValue(Sequence):
                ('priority',Unsigned),                   # [3] priority OPTIONAL
                ]
 
+    def _get(self):
+        return self.value._get()
+
 class SequenceOfPropertyValue(SequenceOf):
     _sequenceof=PropertyValue
     _sequencekey=0
@@ -89,7 +93,7 @@ class ConfirmedServiceRequest(Sequence):
 class UnconfirmedServiceRequest(Sequence):
     _pdutype=0x1 # UnconfirmedRequest
 
-class SimpleACK(Tagged):
+class SimpleACK(Empty):
     _pdutype=0x2 # SimpleACK
 
 class ConfirmedServiceACK(Sequence):
@@ -166,7 +170,7 @@ class ReadProperty(ConfirmedServiceRequest):
     index=None
     
     def _set(self,property=None,object=None,objectInstance=None,index=None):
-        '''ReadProperty convience constructor'''
+        '''ReadProperty convenience constructor'''
         if property!=None and object!=None:
             self.property=PropertyIdentifier(property)
             if objectInstance!=None:
@@ -229,11 +233,14 @@ class ReadPropertyMultipleResponse(SequenceOf,ConfirmedServiceACK):
 class SubscribeCOV(ConfirmedServiceRequest):
     _servicechoice=5 # subscribeCOV
     _sequence=[
-               ('pid',Unsigned32),              # [0] subscriberProcessIdentifier
+               ('spid',Unsigned32),             # [0] subscriberProcessIdentifier
                ('object',ObjectIdentifier),     # [1] monitoredObjectIdentifier
                ('confirmed',Boolean),           # [2] issueConfirmedNotifications
                ('lifetime',Unsigned),           # [3] lifetime
                ]
+    
+class SubscribeCOVResponse(SimpleACK):
+    _servicechoice=5 # subscribeCOV
 
 ## (property, objectType=None) : DataClass mapping
 PropertyMap={

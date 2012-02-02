@@ -13,12 +13,20 @@ trace=False
 ## Config
 SEP="\n"
 
+## Empty Service
+class Empty:
+    def _encode(self,tagnum=None):
+        return ''
+    
+    def _decode(self,data):
+        assert len(data)==0
+    
 ## PhaseII Data types
 class Tagged:
     _value=None
     
     def __init__(self,*args,**kwargs):
-        '''Init with *args for object creation, **kwargs for decodeing (tag=,data=)'''
+        '''Init with *args for object creation, **kwargs for decoding (tag=,data=)'''
         #print "Tagged> %s " % self.__class__, args, kwargs
 
         ## Little messy but makes objects behave nicely.
@@ -27,7 +35,7 @@ class Tagged:
         
         self._init()
         if len(args)>0:
-            self._set(*args)
+            self._new(*args)
         if data:
             self._decode(data)
             
@@ -119,10 +127,16 @@ class Tagged:
         '''
         pass
     
-    def _set(self,value):
+    def _new(self,*value):
         '''Set the value of _value during object construction'''
-        #if debug: print "Tagged.set>", self.__class__, value
+        self._set(*value)
+    
+    def _set(self,value):
+        if debug: print "Tagged.set>", self.__class__, value
         self._value=value
+        
+    def _get(self):
+        return self._value
 
     def _decode(self,data):
         '''Default fixed formatting found in self._format'''
@@ -202,14 +216,15 @@ class Boolean(Tagged):
     _num=1 ## Application tag (Boolean encoded as application differently)
     
     def _encode(self,tagnum=None):
-        assert tagnum==None ## only encode as application supported.
         assert self._value is not None ## Boolean value not set
-        tag=self._setTag(0x1,0,0x01 if self._value else 0x00)
-        return tag
+        value=0x01 if self._value else 0x00
+        if tagnum==None:
+            return self._setTag(0x1,0,value)
+        else:
+            return self._setTag(tagnum,1,1)+struct.pack('!'+'B',value)
 
     def _decode(self, data):
         num,cls,lvt=self._getTag() #@UnusedVariable
-        assert cls==0 ## Only Application decoding supported
         if cls==0:
             assert num==1 ## application tag.
             if lvt==0x00:
@@ -218,6 +233,8 @@ class Boolean(Tagged):
                 self._value=True
             else:
                 assert False ## Invalid Boolean encoding
+        else:
+            Tagged._decode(self,data)
         #print "Boolean.decode>", self._value
 
     def __repr__(self):
@@ -284,11 +301,11 @@ class Bitstring(Tagged):
             self._value=[0]*self._size
         
     def __repr__(self):
-        output=['<<']
+        output=['<']
         for f,v in enumerate(self._value):
             if v:
                 output.append("%s(%d);"% (self._display[f],f))
-        output.append('>>')
+        output.append('>')
         return string.join(output,'')
         
 class ObjectIdentifier(Tagged):
@@ -325,11 +342,17 @@ class ObjectIdentifier(Tagged):
     def __repr__(self):
         return "<%s,%d>" % (bacnet.ObjectType._display[self.type],self.instance)
 
-## Application brings data in without context through property.
-##  * Property should (through the use of current object) 
-##    apply context (enumeration, bit string) to this data.
 
-class Application(Tagged):
+class Property(Tagged):
+    '''
+    Property -- ugly containment (external context required)!
+      properties contain meta-information (property) and a value
+    '''
+    _identifier=None
+    _type=None        ## default type
+    _value=None       ## default value
+
+    _propertymap=None ## delayed initialization
     _application=[
                   None,             # [A0] NULL
                   Boolean,          # [A1] Boolean
@@ -344,61 +367,48 @@ class Application(Tagged):
                   None,             # [A10] Date
                   None,             # [A11] Time
                   ObjectIdentifier, # [A12] ObjectIdentifier
-                  ]
+                  ] ## Application map
     
-    def _decode(self,data):
-        opentag=self._openTag()
-        num,cls,lvt=tag=self._getTag(data) #@UnusedVariable
-        DataClass = self._application[num]
-        #print "Application>", num, DataClass
-        element=DataClass(data=data,tag=tag)
-        self._value=element
-        #print "Application.decode>", element._value
-
-        if opentag!=False:
-            self._getCloseTag(data,opentag)
-            
-    def _encode(self,tagnum=None):
-        assert tagnum==None ## Only encode as an application
-        return self._value._encode()
-            
-    def __repr__(self):
-        return "{%s}" % self._value
-
-class Property(Tagged):
-    '''
-    Property -- ugly containment (external context required)!
-      properties contain meta-information (property) and a value
-    '''
-    _identifier=None
-    _propertymap=None ## delayed initialization
-    _type=Application ## default type
-    
-    def _set(self,property,*value):
-        self._identifier=property
-        self._type=self._propertymap.get(property._value,None) or self._type
-        self._value=self._type(*value)
-        if debug: print "Property.init>", property, self._type
+    def _new(self,identifier,*value):
+        self._identifier=identifier
+        self._type=self._propertymap.get(identifier._value,None)
+        if self._type:
+            self._value=self._type(*value)
+        if debug: print "Property.init>", identifier, self._type
         
     def Add(self,*value):
         return self._value.Add(*value)
                 
     def _decode(self,data):
-        ## remove context open tag for non Application, Array, and SequenceOf tags (they consume them)
-        ## consider adding a self._opentag to Tagged to indicate consumption of open/close tag.
         opentag=self._openTag()
-        if opentag!=False and (not issubclass(self._type, (Application,Array,SequenceOf))):
-            self._getTag(data) ## read next tag
+        ## Application
+        if self._type==None:
+            num,cls,lvt=tag=self._getTag(data) #@UnusedVariable
+            self._type=self._application[num]
+            #print "Property.decode> Application", num, self._type
+            element=self._type(data=data,tag=tag)
+            self._value=element
+            #print "Property.decode> Application", element._value
+
+        ## Array or SequenceOf (do not read close tag and pass off for further processing)
+        elif issubclass(self._type, (Array,SequenceOf)):
+            opentag=False
+            self._value=self._type(data=data,tag=self._getTag())
+
+        ## Everything else (handle open/close tag here so read tag and process)
         else:
-            opentag=False ## do not read close tag.
-            
-        self._value=self._type(data=data,tag=self._getTag())
+            self._value=self._type(data=data,tag=self._getTag(data))
+
         if opentag!=False:
-            self._getCloseTag(data, opentag)
-            
+            self._getCloseTag(data,opentag)
+
     def _encode(self,tagnum=None):
+        assert tagnum!=None ## Properties use open and close tags.
         if debug: print "Property.encode>", tagnum, self._identifier, self._type
         return self._setOpenTag(tagnum)+self._value._encode()+self._setCloseTag(tagnum)
+    
+    def _get(self):
+        return self._value._get()
     
     def __getitem__(self,index):
         '''
@@ -415,7 +425,6 @@ class Property(Tagged):
         return len(self._value) ## peak into array directly
     
     def __repr__(self):
-        assert self._identifier is not None ## test
         if self._identifier==None:
             return repr(self._value)
         return "%s=%s" % (self._identifier, self._value)
@@ -512,22 +521,24 @@ class SequenceOf(Tagged):
             if debug: print "SequenceOf.decode>", len(self._value), name, element
         if debug: print "SequenceOf.decode> ------------", opentag
 
-        ## Magic to make sequenceof to use _sequencekey for attiributes
+        ## Magic to make sequenceof to use _sequencekey for attributes
         if self._sequencekey==None:
             return
-        self._index=[]
+        #self._index=[]
         for item in self._value:
             name,cls = self._sequenceof._sequence[self._sequencekey+start]
             index=getattr(item,name,cls)._value
             display=cls._display[index]
             assert display not in dir(self) ## detect duplicate index values. 
             setattr(self,display,item)
-        #self._value=self
 
     def _encode(self,tagnum=None):
         encoded=[]
         for element in self._value:
             encoded.append(element._encode())
+        if tagnum:
+            encoded.insert(0,self._setOpenTag(tagnum))
+            encoded.append(self._setCloseTag(tagnum))
         return string.join(encoded,'')
 
     def __iter__(self):

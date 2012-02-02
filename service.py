@@ -6,8 +6,10 @@ import bacnet
 from message import Message
 from scheduler import Task
 
-debug=True
-trace=True
+import scheduler
+
+debug=False
+trace=False
 
 ## Objects
 
@@ -75,18 +77,18 @@ class BinaryOutput(Object):
     
     def init(self):
         self.addProperty('presentValue',tagged.Boolean())
-    
-## Services
+
+## Data support    
 
 class InstanceTable:
     def __init__(self,device,name):
         self._instance={}
-        self._device=Device(device,name)
-        self.add(self._device)
+        self.device=Device(device,name)
+        self.add(self.device)
         
     def add(self,properties):
         assert properties.instance is not None ## Instance number not set
-        identifier=self._device.objectList.Add(properties._otype,properties.instance)
+        identifier=self.device.objectList.Add(properties._otype,properties.instance)
         self._instance[identifier]=properties
         print "InstanceTable.add>", identifier
         
@@ -96,6 +98,59 @@ class InstanceTable:
     def __repr__(self):
         return repr(self._instance)
 
+## Services
+
+
+class COV(Task):
+    '''Incomplete implementation for testing'''
+    def init(self,table):
+        self.table=table
+        self.device=table.device
+        self.subscribe={}
+        
+    def run(self):
+        ack=yield None
+        for i in range(0,100):
+            #ping=yield scheduler.Wait(1)
+            for o,(request,v) in self.subscribe.items():
+                v._value=not v._value ## boolean only!
+                p=self.table[o]
+
+                values=bacnet.SequenceOfPropertyValue()
+                pv=values.Add()
+                pv.property=p.presentValue._identifier
+                pv.value=p.presentValue
+                
+                pv.index=None ## set optional: don't like (from New)!
+                pv.priority=None
+                
+                cov=bacnet.UnconfirmedCOVNotification()
+                cov.pid=request.message.spid._value
+                cov.device=self.device.objectIdentifier._value
+                cov.object=o
+                cov.time=0 ## TODO: unimplemented
+                cov.values=values
+                
+                print "COV>",i,cov
+                ack=yield Message(request.remote,cov,confirmed=False)
+                print "COV>",i,ack
+
+
+class SubscribeCOV(Task):
+
+    def init(self,table,cov):
+        self.table=table
+        self.cov=cov
+        
+    def run(self):
+        request=yield None ## boot
+        while True:
+            print "SubscribeCOV>", request.message.object
+            assert request.message.confirmed._value==False ## only support unconfirmed
+            self.cov.subscribe[request.message.object]=(request,self.table[request.message.object].presentValue._value)
+            response=bacnet.SubscribeCOVResponse()
+            #print "SubscribeCOV>", request.invoke, response
+            request=yield Message(request.remote,response,request.invoke)
 
 class ReadPropertyMultiple(Task):
 

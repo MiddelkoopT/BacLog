@@ -132,7 +132,7 @@ class Error(Packet):
     def __init__(self,data=None):
         Packet.__init__(self,0x00,0x50)     # Reply ; Error | 0x00
         self._add('invoke','B',None)        # Responding to Request ID
-        self._add('servicechoice','B',None)   # serviceChoice/Error
+        self._add('servicechoice','B',None) # serviceChoice/Error
         if(data):
             self._decode(data)
 

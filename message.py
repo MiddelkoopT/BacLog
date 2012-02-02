@@ -15,14 +15,14 @@ trace=False
 
 class Message:
     _handler=None
-    def __init__(self,remote,message=None,invoke=None,timeout=2.0):
+    def __init__(self,remote,message=None,invoke=None,timeout=2.0,confirmed=True):
         self.remote=remote
         self.message=message
         self.invoke=invoke
-        if invoke!=None: ## Reply messages do not timeout.
+        self.confirmed=confirmed
+        self.timeout=timeout
+        if invoke!=None or confirmed==False: ## Reply messages do not timeout.
             self.timeout=None
-        else:
-            self.timeout=timeout
         self.stamp=None
 
     def __repr__(self):
@@ -62,7 +62,7 @@ class MessageHandler:
 
         if work.request.invoke!=None: ## this is a reply/resend.
             p.invoke=work.request.invoke
-        else:
+        elif work.request.confirmed==True:
             self.invoke=(self.invoke+1)%256 ## Increment counter
             if self.wait.has_key(self.invoke):
                 if debug: print "MessageHandler.put> invoke search", self.invoke, self.wait 
@@ -149,7 +149,7 @@ class MessageHandler:
             if task:
                 tid=task.tid
                 
-            if hasattr(message,'pid'):
+            if hasattr(message,'pid'): ## spid is the source pid
                 tid=message.pid._value
                 
             if tid==None:
