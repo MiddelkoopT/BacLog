@@ -1,3 +1,49 @@
+## Ubuntu Server
+sudo apt-get update ; sudo apt-get dist-upgrade
+sudo apt-get install mg zsh ssh
+sudo apt-get install git git-svn subversion
+sudo apt-get install python-psycopg2
+rehash
+
+## gator@ufl.edu and SVN password.
+install -dv BacLog && cd BacLog
+git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/projects/svn/BacLog
+git svn fetch
+
+sudo su postgres -c 'createuser -d -s mtim'
+createdb baclog
+psql baclog < postgres.sql
+
+cat <<EOF >local.ini
+[Network]
+bind=127.0.0.2
+device=9002
+
+[Options]
+bootstrap=True
+getinitialvalue=False
+lifetime=20
+subscribeCOV=True
+
+[Client]
+bind=127.0.0.3
+device=9003
+
+[Console]
+devices=127.0.0.3!9003
+
+[127.0.0.3]
+objects=binary-output:0
+
+EOF
+
+python baclog.py &
+python bacnode.py &
+
+psql baclog -c "select * from log;"
+
+#### Advanced
+
 ## Python/Postgres
 sudo easy_install psycopg2
 
