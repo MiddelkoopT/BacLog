@@ -10,7 +10,7 @@ import scheduler
 import message
 import service
 
-import object
+from objects import Object
 
 import console
 import postgres as database
@@ -40,6 +40,27 @@ class GetPresentValue(Task):
                                         m.object.type,m.object.instance,m.value._value._value)
 
 
+class WritePresentValue(Task):
+    
+    def init(self,target):
+        self.target=target
+    
+    def run(self):
+        value=False
+        for i in range(0,10):
+            value=not value
+            wpv=bacnet.WriteProperty()
+            wpv._new()
+            wpv.object._set('binaryOutput',20)
+            wpv.property._set(bacnet.PropertyIdentifier.presentValue)
+            wpv.index=None
+            wpv.value=bacnet.Property(value,ptype=bacnet.BinaryPV)
+            wpv.priority._set(12)
+            print "WritePresentValue>",i,wpv
+            ack=yield Message(self.target,wpv)
+            print ack
+            
+
 class SubscribeCOV(Task):
     def run(self):
         while True:
@@ -63,8 +84,8 @@ class SubscribeCOV(Task):
 
 
 class FindObjects(Task):
-    def __init__(self,devices):
-        Task.__init__(self)
+
+    def init(self,devices):
         self.devices=devices
         
     def run(self):
@@ -79,7 +100,7 @@ class FindObjects(Task):
 
         for target in self.devices:
             if info: print "FindObjects> ** device start:", target
-            message=bacnet.ReadProperty('objectName','device',target.device)
+            message=bacnet.ReadProperty('objectName',('device',target.device))
             response=yield Message(target.address,message)
             name=response.message.value._value
             response=yield database.Device(target.IP,target.port,target.device,name)
@@ -89,11 +110,12 @@ class FindObjects(Task):
             index=0
             while True:
                 index+=1
-                readproperty=bacnet.ReadProperty('objectList','device',target.device,index)
-                property=yield Message(target.address,readproperty)
-                if isinstance(property.message, bacnet.Error):
+                readproperty=bacnet.ReadProperty('objectList',('device',target.device),index)
+                request=yield Message(target.address,readproperty)
+                if isinstance(request.message, bacnet.Error):
                     break
-                o=property.message.value[0] ## Object
+                
+                o=request.message.value[0] ## Object
                 if debug: print "FindObjects>", o
                 if o.type in ioObjectTypes:
                     objects.append(o)
@@ -107,7 +129,7 @@ class FindObjects(Task):
                 if debug: print "FindObjects> name:", name, description
                 response=yield database.Object(deviceID,o.type,o.instance,name,description)
                 objectID,=response.pop()
-                target.objects.append(object.Object(objectID,o.type,o.instance,name))
+                target.objects.append(Object(objectID,o.type,o.instance,name))
                 
             if debug: print "FindObjects> ** device end:",target.device
 
@@ -190,18 +212,10 @@ class BacLog:
         print "BacLog.run> configure"
 
         table=service.InstanceTable(device,name)
-        property=service.ReadProperty(table)
-        scheduler.add(property)
-        self.mh.addService(property, bacnet.ReadProperty)
-
-        properties=service.ReadPropertyMultiple(table)
-        scheduler.add(properties)
-        self.mh.addService(properties,bacnet.ReadPropertyMultiple)
-
-        whois=service.WhoIs()
-        whois.device=device
-        scheduler.add(whois)
-        self.mh.addService(whois,bacnet.WhoIs)
+        
+        service.register(scheduler,self.mh,service.ReadProperty(device,name,table))
+        service.register(scheduler,self.mh,service.ReadPropertyMultiple(device,name,table))
+        service.register(scheduler,self.mh,service.WhoIs(device))
 
         cov_pid=scheduler.add(COVNotification())
         
@@ -215,6 +229,9 @@ class BacLog:
                 cov.pid=cov_pid
                 cov.lifetime=lifetime
                 scheduler.add(cov)
+                
+        for target in devices:
+            scheduler.add(WritePresentValue(target.address))
 
         ## Run scheduler.
         print "BacLog.run> run"

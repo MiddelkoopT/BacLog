@@ -4,11 +4,11 @@
 import ConfigParser as configparser
 config=None
 
-import bacnet
-import tagged
 import scheduler
 import message
 import service
+
+import tagged
 
 #### Main Class
 
@@ -45,20 +45,14 @@ class BacNode:
         point.presentValue._value=tagged.Boolean(True)
         table.add(point)
 
-        readproperty=service.ReadProperty(table)
-        scheduler.add(readproperty)
-        self.mh.addService(readproperty, bacnet.ReadProperty)
-
-        properties=service.ReadPropertyMultiple(table)
-        scheduler.add(properties)
-        self.mh.addService(properties,bacnet.ReadPropertyMultiple)
+        service.register(scheduler,self.mh,service.ReadProperty(table))
+        service.register(scheduler,self.mh,service.ReadPropertyMultiple(table))
+        service.register(scheduler,self.mh,service.WriteProperty(table))
 
         cov=service.COV(table)
         scheduler.add(cov)
         
-        subscribecov=service.SubscribeCOV(table,cov)
-        scheduler.add(subscribecov)
-        self.mh.addService(subscribecov,bacnet.SubscribeCOV)
+        service.register(scheduler,self.mh,service.SubscribeCOV(table,cov))
 
         print "BacLog.run> run"
         scheduler.run()

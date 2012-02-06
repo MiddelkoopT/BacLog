@@ -6,7 +6,7 @@ import time
 import psycopg2.extras
 from scheduler import Task
 
-import object
+import objects
 
 debug=False
 trace=False
@@ -167,7 +167,7 @@ class GetDevices(Task):
         response=yield query
         self.devices=[]
         for deviceID,IP,port,device in response:
-            device=object.Device(IP,port,device,deviceID)
+            device=objects.Device(IP,port,device,deviceID)
             self.devices.append(device)
         if debug: print "postgres.GetDevices>", self.devices
         for d in self.devices:
@@ -188,10 +188,10 @@ class Log(Query):
         Query.__init__(self,query, stamp,IP,port,otype,oinstance,value,status,objectID)
 
 class Object(Query):
-    def __init__(self,deviceID,type,instance,name,description=None,pointID=None):
+    def __init__(self,deviceID,otype,oinstance,name,description=None,pointID=None):
         query="INSERT INTO Objects (first,deviceID,type,instance,name,description,pointID) VALUES (%s,%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
         now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query, now,deviceID,type,instance,name,description,pointID)
+        Query.__init__(self,query, now,deviceID,otype,oinstance,name,description,pointID)
 
 class Device(Query):
     def __init__(self,IP,port,device,name):

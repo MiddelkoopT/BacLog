@@ -2,12 +2,19 @@
 
 import tagged
 
-from tagged import Unsigned32, Unsigned16, Unsigned, Boolean, String 
+from tagged import Unsigned32, Unsigned16, Unsigned8, Unsigned, Boolean, String 
 from tagged import ObjectIdentifier, Property, Enumerated, Bitstring, Sequence, SequenceOf, Array, Empty
+
 
 ## Data types
 class ObjectIdentifierArray(Array):
-    _type=tagged.ObjectIdentifier
+    _type=ObjectIdentifier
+
+class BinaryPV(Enumerated):
+    _enumeration={
+                  'inactive':0,
+                  'active':1
+                  }
 
 ## PhaseII Enumerations
 
@@ -116,6 +123,7 @@ class ErrorCode(Enumerated):
                   'other':0,
                   'configurationInProgress':2,
                   'deviceBusy':3,
+                  'invalidDataType':9,
                   'timeout':30,
                   'unknownObject':31,
                   'unknownProperty':32,
@@ -129,8 +137,8 @@ class Error(ErrorACK):
     _servicechoice=12 # readProperty
     _context=False # context values not used.
     _sequence=[
-               ('class',ErrorClass), # [0] error-class
-               ('code',ErrorCode),   # [1] error-clode
+               ('eclass',ErrorClass), # [0] error-class
+               ('ecode',ErrorCode),   # [1] error-clode
                ]
 
 class UnconfirmedCOVNotification(UnconfirmedServiceRequest):
@@ -169,15 +177,28 @@ class ReadProperty(ConfirmedServiceRequest):
                ]
     index=None
     
-    def _set(self,property=None,object=None,objectInstance=None,index=None):
+    def _set(self,pidentifier=None,instance=None,index=None):
         '''ReadProperty convenience constructor'''
-        if property!=None and object!=None:
-            self.property=PropertyIdentifier(property)
-            if objectInstance!=None:
-                object=ObjectIdentifier(object,objectInstance)
-            self.object=object
+        if pidentifier!=None and object!=None:
+            self.property=PropertyIdentifier(pidentifier)
+            if not isinstance(instance,ObjectIdentifier):
+                instance=ObjectIdentifier(*instance)
+        self.object=instance
         self.index=index
-
+        
+class WriteProperty(ConfirmedServiceRequest):
+    _servicechoice=15 # writeProperty
+    _sequence=[
+               ('object',ObjectIdentifier),     # [0] objectIdentifier
+               ('property',PropertyIdentifier), # [1] propertyIdentifier
+               ('index',Unsigned),              # [2] propertyArrayIndex OPTIONAL
+               ('value',Property),              # [3] propertyValue ASN.1
+               ('priority',Unsigned8),          # [4] priority OPTIONAL
+               ]
+    
+class WritePropertyACK(SimpleACK):
+    _servicechoice=15 # writeProperty
+    
 class PropertyReference(Sequence):
     _sequence=[
                ('property',PropertyIdentifier),     # [0] propertyIdentifier

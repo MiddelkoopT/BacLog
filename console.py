@@ -3,7 +3,8 @@
 
 import ConfigParser
 import string
-import object
+
+from objects import Device
 
 class Database:
     def __init__(self,database='Console'):
@@ -17,7 +18,7 @@ class Database:
         database=[]
         for d in devices:
             address,instance=d.split('!')
-            device=object.Device(address,self.port,int(instance))
+            device=Device(address,self.port,int(instance))
             database.append(device)
         #print "console.Database.getDevices>", database 
         return database

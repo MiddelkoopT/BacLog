@@ -10,7 +10,7 @@ import bacnet
 debug=False
 trace=False
 
-## Config
+## Configuration
 SEP="\n"
 
 ## Empty Service
@@ -29,15 +29,19 @@ class Tagged:
         '''Init with *args for object creation, **kwargs for decoding (tag=,data=)'''
         #print "Tagged> %s " % self.__class__, args, kwargs
 
+
         ## Little messy but makes objects behave nicely.
-        self._tag=kwargs.get('tag',None)     ## Current tag.
-        data=kwargs.get('data',None)
+        self._tag=kwargs.pop('tag',None)     ## Current tag.
+        data=kwargs.pop('data',None)
         
-        self._init()
-        if len(args)>0:
-            self._new(*args)
+        self._init(**kwargs)
+        
         if data:
             self._decode(data)
+        else:
+            self._new()
+            if len(args)>0:
+                self._set(*args)
             
     def _getTag(self,data=None):
         '''
@@ -48,11 +52,11 @@ class Tagged:
         if data==None:
             return self._tag
         
-        next=data._get()
-        if next==None:
+        ndata=data._get()
+        if ndata==None:
             return None
         
-        tag,=struct.unpack('!B',next)
+        tag,=struct.unpack('!B',ndata)
         num=(tag&0xF0)>>4
         cls=(tag&0x08)>>3
         lvt=(tag&0x07)
@@ -72,19 +76,19 @@ class Tagged:
     
     def _setTag(self,num,cls,lvt):
         tag=[]
-        format='!B'
+        fmt='!B'
         ## tag number
         assert num < 0xF  ## tag too large
         ## lvt
         assert lvt < 0xFE ## lvt too large
         if lvt>=0x05: ## Only encodes length
-            format+='B'
+            fmt+='B'
             tag.append(lvt)
             lvt=0x05 ## 8 bit lvt
             
         ## Tag
         tag.insert(0,(num << 4) | (cls << 3) | (lvt))
-        return struct.pack(format,*tag)
+        return struct.pack(fmt,*tag)
         
     def _openTag(self):
         '''
@@ -106,10 +110,10 @@ class Tagged:
         '''
         Returns True if more data until matched tag
         '''
-        next=self._getTag(data)
-        if next==None:
+        nexttag=self._getTag(data)
+        if nexttag==None:
             return None ## no more data
-        tag,cls,lvt=next #@UnusedVariable
+        tag,cls,lvt=nexttag #@UnusedVariable
         if not (cls==1 and lvt==-7): ## not a close tag.
             return True
         assert tag==opentag ## close tag does not have expected tag number
@@ -125,11 +129,11 @@ class Tagged:
         '''
         Setup the object.
         '''
-        pass
     
-    def _new(self,*value):
-        '''Set the value of _value during object construction'''
-        self._set(*value)
+    def _new(self):
+        '''
+        Setup empty object
+        '''
     
     def _set(self,value):
         if debug: print "Tagged.set>", self.__class__, value
@@ -187,26 +191,29 @@ class Unsigned(Tagged):
         '''Variable length encoding of Unsigned'''
         value=self._value
         length=0
-        bytes=[]
+        data=[]
         while True:
             length+=1
-            bytes.insert(0,value & 0xFF)
+            data.insert(0,value & 0xFF)
             value=value>>8
             if value==0:
                 break
-        #print length, bytes
+        #print length, data
         assert length<=self._size ## Max sized unsigned
         if(tagnum==None):  ## encode as application tag
             tag=self._setTag(self._num,0,length)
         else:
             tag=self._setTag(tagnum,1,length)
-        return tag+struct.pack('!'+'B'*length,*bytes)
+        return tag+struct.pack('!'+'B'*length,*data)
 
 class Unsigned32(Unsigned):
     _size=4
 
 class Unsigned16(Unsigned):
     _size=2
+
+class Unsigned8(Unsigned):
+    _size=1
 
 class Float(Tagged):
     _format='!f'
@@ -270,6 +277,7 @@ class Enumerated(Unsigned):
         self._value=value
 
     def __repr__(self):
+        #print "Enumerated>", self.__class__, self._value
         return "%s(%d)" % (self._display[self._value],self._value)
 
 class Bitstring(Tagged):
@@ -286,11 +294,11 @@ class Bitstring(Tagged):
     def _encode(self,tagnum=None):
         assert tagnum==None and self._size==40 ## Only support services supported bitmap (40 bit)
         length=(self._size+7)>>3 ## in bytes.
-        bytes=[0]*length
+        data=[0]*length
         for field,value in enumerate(self._value):
             if value:
-                bytes[field>>3] |= 0x80>>(field&0x07) ## set bit.
-        return self._setTag(self._num,0,length+1)+struct.pack('!B'+'B'*length,self._size&0x07,*bytes) ## tag + (unencoded bits, bits)
+                data[field>>3] |= 0x80>>(field&0x07) ## set bit.
+        return self._setTag(self._num,0,length+1)+struct.pack('!B'+'B'*length,self._size&0x07,*data) ## tag + (unencoded bits, bits)
     
     def _set(self,fields):
         for f in fields:
@@ -316,11 +324,11 @@ class ObjectIdentifier(Tagged):
     def _decode(self,data):
         num,cls,length=self._getTag() #@UnusedVariable
         assert length==4
-        object,=struct.unpack('!L',data._get(length))
-        self.type=int((object&0xFFC00000)>>22)
-        self.instance=      (object&0x003FFFFF)
+        identifier,=struct.unpack('!L',data._get(length))
+        self.type=int((identifier&0xFFC00000)>>22)
+        self.instance=      (identifier&0x003FFFFF)
         self._value=(self.type,self.instance)
-        #print "ObjectIdentifier.decode> %08x" % object , self._value
+        #print "ObjectIdentifier.decode> %08x" % identifier , self._value
         
     def _encode(self,tagnum=None):
         if tagnum==None:
@@ -369,15 +377,28 @@ class Property(Tagged):
                   ObjectIdentifier, # [A12] ObjectIdentifier
                   ] ## Application map
     
-    def _new(self,identifier,*value):
-        self._identifier=identifier
-        self._type=self._propertymap.get(identifier._value,None)
+    def _init(self,identifier=None,application=None,ptype=None):
+        if identifier:
+            self._identifier=identifier
+            self._type=self._propertymap.get(identifier._value,None)
+        if application:
+            assert application in self._application ## unsupported application
+            self._type=application
+        if ptype:
+            self._type=ptype
+        
+    def _new(self):
+        if self._type!=None and issubclass(self._type, (Array,SequenceOf)):
+            self._value=self._type()
+
+    def _add(self,*value):
+        return self._value._add(*value)
+
+    def _set(self,*value):
+        if debug: print "Property.set>", self._identifier, self._type
         if self._type:
             self._value=self._type(*value)
-        if debug: print "Property.init>", identifier, self._type
         
-    def Add(self,*value):
-        return self._value.Add(*value)
                 
     def _decode(self,data):
         opentag=self._openTag()
@@ -385,10 +406,10 @@ class Property(Tagged):
         if self._type==None:
             num,cls,lvt=tag=self._getTag(data) #@UnusedVariable
             self._type=self._application[num]
-            #print "Property.decode> Application", num, self._type
+            if debug: print "Property.decode> Application", num, self._type
             element=self._type(data=data,tag=tag)
             self._value=element
-            #print "Property.decode> Application", element._value
+            if debug: print "Property.decode> Application", element._value
 
         ## Array or SequenceOf (do not read close tag and pass off for further processing)
         elif issubclass(self._type, (Array,SequenceOf)):
@@ -416,7 +437,7 @@ class Property(Tagged):
         Return a single item as a property (provides context) using the parent property._identifier        
         '''
         assert isinstance(self._value, Array)
-        item=Property(self._identifier)
+        item=Property(identifier=self._identifier)
         item._value=self._value[index]
         return item
         
@@ -436,12 +457,10 @@ class Sequence(Tagged):
     _sequencestart=0
     _context=True
     
-    def New(self):
+    def _new(self):
         '''Populate with empty items'''
         for name,DataClass  in self._sequence:
             data=DataClass()
-            if hasattr(data,'New'):
-                data.New()
             setattr(self,name,data)
     
     def _decode(self,data):
@@ -456,12 +475,13 @@ class Sequence(Tagged):
             else:
                 tagnum=num+start
             name, DataClass = self._sequence[tagnum]
+            if debug: print "Sequence.decode>", name, DataClass
             if issubclass(DataClass, Property): ## Hard coded context for Property
-                element=Property(self.property,data=data,tag=self._getTag())._value
+                element=Property(identifier=self.property,data=data,tag=self._getTag())._value
             else:
                 element=DataClass(data=data,tag=self._getTag())
             setattr(self,name,element)
-            if debug: print "Sequence.decode>", name, element
+            if debug: print "Sequence.decode>", name, DataClass, element
         if debug: print "Sequence.decode> ------------", opentag
         self._value=self
         
@@ -476,7 +496,8 @@ class Sequence(Tagged):
             if element==None: continue
             if debug: print "Sequence.encode>", tagnum, name, cls, element
             if isinstance(element, Tagged):
-                encoded.append(element._encode(tagnum))
+                if  element._value!=None:
+                    encoded.append(element._encode(tagnum))
             else: ## Allow implicit conversion
                 encoded.append(cls(element)._encode(tagnum))
         return string.join(encoded,'')
@@ -497,9 +518,9 @@ class SequenceOf(Tagged):
     def _init(self):
         self._value=[]
 
-    def Add(self):
+    def _add(self):
         new=self._sequenceof()
-        new.New()
+        new._new()
         self._value.append(new)
         return new
 
@@ -566,14 +587,14 @@ class Array(Tagged):
         
     def _decode(self,data):
         opentag=self._openTag()
-        #print "Array.decode> ===========", opentag
+        if trace: print "Array.decode> ===========", opentag
         self._value=[]
         while self._getCloseTag(data,opentag):
             num,cls,lvt=self._getTag() #@UnusedVariable
             item=self._type(data=data,tag=self._getTag())
             self._value.append(item)
             #print "Array.decode>", item
-        #print "Array.decode> -----------", opentag
+        if trace: print "Array.decode> -----------", opentag
         
     def _encode(self,tagnum=None):
         encoded=[]
@@ -581,7 +602,7 @@ class Array(Tagged):
             encoded.append(element._encode())
         return string.join(encoded,'')
 
-    def Add(self,*value):
+    def _add(self,*value):
         #print "Array.add>", self.__class__, value
         item=self._type(*value)
         self._value.append(item)

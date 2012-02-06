@@ -8,14 +8,21 @@ from scheduler import Task
 
 import scheduler
 
-debug=False
-trace=False
+debug=True
+trace=True
 
 ## Objects
 
 ### TODO: Migrate this to a generic object type and push to bacnet 
 ### These are not first class objects as there is no ANS.1 Encoding.
 ### Use a similar object structure and initialization style (ducktype) as bacnet objects.
+
+def register(scheduler,mh,servicehandler,Service=None):
+    if Service==None:
+        Service=servicehandler._service
+    print "service.register>", Service
+    scheduler.add(servicehandler)
+    mh.addService(servicehandler,Service)
 
 class Object:
     _otype=None 
@@ -38,11 +45,11 @@ class Object:
     def addProperty(self,name,value=None):
             pidentifier=bacnet.PropertyIdentifier(name)
             if type(value)==type(tuple()):
-                value=bacnet.Property(pidentifier,*value)
+                value=bacnet.Property(*value,identifier=pidentifier)
             elif value is None:
-                value=bacnet.Property(pidentifier) 
+                value=bacnet.Property(identifier=pidentifier) 
             else:
-                value=bacnet.Property(pidentifier,value)
+                value=bacnet.Property(value,identifier=pidentifier)
             self.property[pidentifier]=value
             assert not hasattr(self,name) ## Duplicate attr
             setattr(self,name,value)
@@ -88,7 +95,7 @@ class InstanceTable:
         
     def add(self,properties):
         assert properties.instance is not None ## Instance number not set
-        identifier=self.device.objectList.Add(properties._otype,properties.instance)
+        identifier=self.device.objectList._add(properties._otype,properties.instance)
         self._instance[identifier]=properties
         print "InstanceTable.add>", identifier
         
@@ -109,9 +116,9 @@ class COV(Task):
         self.subscribe={}
         
     def run(self):
-        for i in range(0,10):
+        for i in range(0,2):
             yield scheduler.Wait(1)
-            for j in range(0,10):
+            for j in range(0,2):
                 for o,(request,v) in self.subscribe.items():
                     print "COV>",i,j,o
                     v._value=not v._value ## boolean only!
@@ -121,7 +128,7 @@ class COV(Task):
     def cov(self,o,request,v):
         p=self.table[o]
         values=bacnet.SequenceOfPropertyValue()
-        pv=values.Add()
+        pv=values._add()
         pv.property=p.presentValue._identifier
         pv.value=p.presentValue
         
@@ -140,6 +147,7 @@ class COV(Task):
 
 
 class SubscribeCOV(Task):
+    _service=bacnet.SubscribeCOV
 
     def init(self,table,cov):
         self.table=table
@@ -156,8 +164,11 @@ class SubscribeCOV(Task):
             request=yield Message(request.remote,response,request.invoke)
 
 class ReadPropertyMultiple(Task):
+    _service=bacnet.ReadPropertyMultiple
 
-    def init(self,table):
+    def init(self,device,name,table):
+        self.device=device
+        self.name=name
         self.table=table
 
     def run(self):
@@ -165,15 +176,15 @@ class ReadPropertyMultiple(Task):
         while True:
             if trace: print "ReadPropertyMultiple>", request
             response=bacnet.ReadPropertyMultipleResponse()
-            for object in request.message:
-                assert object.object.instance==self.device ## support only Device
-                result=response.Add()
-                result.object=object.object
-                device=Device(self.device)
-                for reference in object.list:
+            for o in request.message:
+                assert o.object.instance==self.device ## support only Device
+                result=response._add()
+                result.object=o.object
+                device=Device(self.device,self.name)
+                for reference in o.list:
                     value=device.property.get(reference.property,None)
                     if value==None: continue
-                    item=result.list.Add()
+                    item=result.list._add()
                     item.property=reference.property
                     item.value=value
                     item.index=None
@@ -182,8 +193,11 @@ class ReadPropertyMultiple(Task):
             request=yield Message(request.remote,response,request.invoke)
 
 class ReadProperty(Task):
-
-    def init(self,table):
+    _service=bacnet.ReadProperty
+    
+    def init(self,device,name,table):
+        self.device=device
+        self.name=name
         self.table=table
         
     def run(self):
@@ -199,6 +213,8 @@ class ReadProperty(Task):
             if request.message.index is not None:
                 if request.message.index._value > len(response.value): ## 1 based index; bounds error
                     response=bacnet.Error() ## TODO: give proper error value.
+                    response.ecode=bacnet.ErrorCode('invalidArrayIndex')
+                    response.eclass=bacnet.ErrorClass('property')
                 else:
                     response.index=request.message.index._value
                     response.value=response.value[response.index-1] ## 1 based index
@@ -207,7 +223,25 @@ class ReadProperty(Task):
             if trace: print "ReadProperty>", request.invoke, response
             request=yield Message(request.remote,response,request.invoke)
 
+class WriteProperty(Task):
+    _service=bacnet.WriteProperty
+    
+    def init(self,table):
+        self.table=table
+        
+    def run(self):
+        request=yield None ## Boot
+        while True:
+            print "WriteProperty>", request
+            request=yield Message(request.remote,bacnet.WritePropertyACK(),request.invoke)
+            
+
+
 class WhoIs(Task):
+    _service=bacnet.WhoIs
+    
+    def init(self,device):
+        self.device=device
 
     def run(self):
         whois=yield None ## boot
@@ -216,7 +250,7 @@ class WhoIs(Task):
             iam=bacnet.IAm()
             iam.object=bacnet.ObjectIdentifier('device',self.device)
             iam.maxlength=1024
-            iam.segmentation=bacnet.Segmented.noSegmentation #@UndefinedVariable
+            iam.segmentation=bacnet.Segmented('noSegmentation') #@UndefinedVariable
             iam.vendor=65535
             print "WhoIs>", iam
             whois=yield Message(whois.remote,iam,timeout=None)
