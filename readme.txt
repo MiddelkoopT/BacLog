@@ -7,6 +7,14 @@ SELECT Log.time,Devices.device,Devices.name,Objects.type,Objects.instance,Log.va
 select * FROM Log WHERE age(NOW(),time) < interval '00:00:10';
 while sleep 1; do psql baclog --tuples-only -c "select * FROM Log WHERE age(NOW(),time) < interval '00:00:01';" ; done
 
+while sleep 1; do psql -p 5435 baclog --tuples-only -P pager=off -c "
+SELECT Log.time,Devices.device,Devices.name,Objects.type,Objects.instance,Log.value,Objects.name 
+FROM Log JOIN Devices USING (IP,port) 
+JOIN Objects USING (deviceID,type,instance) 
+WHERE Devices.last IS NULL 
+AND age(NOW(),time) < interval '00:00:02';" ; done
+
+
 ## Development tools
 rsync -av *.py baclog.ad.ufl.edu:BacLog/
 rsync -a kiwi:uflorida/BacLog/\*.py . && rsync -a *.py baclog.ad.ufl.edu:BacLog/
@@ -26,3 +34,10 @@ Test program.
      100   WAIT(5,P20,P20,10)
      110   WAIT(5,P20,P20,1)
 Enable program, disable point.
+
+## Some queries
+# CO2
+SELECT Log.time,Devices.device,Devices.name,Objects.type,Objects.instance,Log.value,Objects.name,Objects.description FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,instance) WHERE time > '2012-02-01' AND objects.instance=13 and objects.type=0 AND Devices.device=9041;
+SELECT Log.time,Devices.device,Objects.type,Objects.instance,Objects.name,Log.value FROM Log JOIN Devices USING (IP,port) JOIN Objects USING (deviceID,instance) WHERE time > '2012-01-01' AND objects.instance=13 and objects.type=0 AND Devices.device=9041;
+
+psql -q -A -F',' -P footer=off -c ""
