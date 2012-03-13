@@ -238,7 +238,7 @@ class Analysis:
         ## Stream compute
         i=0;
         for time,device,otype,oinstance,value in db.getData(limit):
-            v=Value(db.getObject(device,otype,oinstance),value,time,0) ## Build value
+            v=Value(db.getInstance(device,otype,oinstance),value,time,0) ## Build value
             data.send(v) ## input data
             
             ## Debug

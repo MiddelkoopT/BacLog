@@ -14,6 +14,15 @@ JOIN Objects USING (deviceID,type,instance)
 WHERE Devices.last IS NULL 
 AND age(NOW(),time) < interval '00:00:02';" ; done
 
+## Dump to csv
+psql -h ceoci -p 5435 -q -A -F',' -P footer=off -c "
+SELECT Log.time,Devices.device,Objects.type,Objects.instance,Log.value -- ,Objects.name
+FROM Log JOIN Devices USING (IP,port)
+JOIN Objects USING (deviceID,type,instance)
+WHERE Devices.last IS NULL
+AND device=9040 AND type=0 AND instance=1
+" baclog > ~/tmp/test.csv
+
 
 ## Development tools
 rsync -av *.py baclog.ad.ufl.edu:BacLog/

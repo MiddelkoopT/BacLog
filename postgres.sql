@@ -59,24 +59,46 @@ CREATE TABLE Log (
 
 CREATE INDEX i_Log_time ON Log (time);
 
--- Control program
-DROP TABLE IF EXISTS Control;
-CREATE TABLE Control (
-	controlID SERIAL,					-- control ID - order of control
+-- Schedule program (Bacset side)
+DROP TABLE IF EXISTS Schedule;
+CREATE TABLE Schedule (
+	scheduleID SERIAL,					-- schedule ID - order of schedule
 	objectID integer,					-- object/device to control
 	active timestamp with time zone,	-- set value after this time
 	until timestamp with time zone,		-- do not set after this value
 	value real,							-- set to value
-	CONSTRAINT Control_PK PRIMARY KEY (controlID)
+	CONSTRAINT Schedule_PK PRIMARY KEY (scheduleID)
 );
 
--- Commands
+-- Control plan (baclog side, refactored/duplicated)
+DROP TABLE IF EXISTS Control;
+CREATE TABLE Control (
+	scheduleID integer,					-- Control based on this schedule
+	objectID integer,					-- object to be controled
+	active timestamp with time zone,	-- control start
+	until timestamp with time zone,		-- control end
+	value integer,						-- control value
+	enable boolean,						-- control active
+	disable boolean,						-- control overriden or released
+	CONSTRAINT Control_PK PRIMARY KEY (scheduleID)
+);
+
+-- Command Log -- commands written to device.
 DROP TABLE IF EXISTS Commands;
 CREATE TABLE Commands (
-	controlID integer,					-- commanded control
-	next integer,						-- next command
-	time timestamp with time zone,		-- time command issued
-	cleared timestamp with time zone,	-- value cleared
-	CONSTRAINT Command_PK PRIMARY KEY (controlID)
-	
+	commandID SERIAL,					-- command handle for updates.
+	scheduleID integer, 				-- commanded due to schedule
+	time timestamp with time zone,		-- commanded time
+	IP inet, 							-- remote IP
+	port integer,		 				-- remote port
+	device integer,						-- remote device
+	type integer,						-- remote object type
+	instance integer,			 		-- remote object instance
+	value real,							-- commanded value, NULL means release value
+	priority integer,					-- priority of commanded value
+	success boolean,					-- unit returned success
+	verified boolean,					-- True if unit is at commanded value, NULL indicates no attempt.
+	CONSTRAINT Command_PK PRIMARY KEY (commandID)
 );
+
+CREATE INDEX i_Commands_time ON Commands (time);

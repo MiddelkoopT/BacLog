@@ -230,8 +230,8 @@ class BacLog:
                 cov.lifetime=lifetime
                 scheduler.add(cov)
                 
-        for target in devices:
-            scheduler.add(WritePresentValue(target.address))
+        #for target in devices:
+        #    scheduler.add(WritePresentValue(target.address))
 
         ## Run scheduler.
         print "BacLog.run> run"

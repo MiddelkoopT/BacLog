@@ -54,6 +54,24 @@ class Building:
         pass
 
 #### Specific Buildings
+class Test(Building):
+    
+    def _tag(self,instance):
+        name=instance.name
+        print "Test.tag>", name
+
+        for r in re.finditer('^P(\d+)', name):
+            instance.setTag('point',int(r.group(1)))
+            instance.setTag('unit',name)
+            
+        if instance.otype==3:
+            instance.setTag('input',True)
+            instance.setTag('descriptor','input')
+
+        if instance.otype==4:
+            instance.setTag('output',True)
+            instance.setTag('descriptor','output')
+
 
 class PughHall(Building):
     ## Rename

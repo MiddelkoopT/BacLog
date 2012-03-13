@@ -31,7 +31,7 @@ class Instance:
             output.append("|%s:%s" % (self.tags.get('unit'),self.tags.get('descriptor')))
             if trace and self.description:
                 output.append(';'+self.description)
-        output.append('>')
+        output.append(">@%s" % self.id)
 
         if trace and self.tags:
             tags=[]

@@ -4,7 +4,22 @@
 library('lattice');
 
 library('RODBC');
-c <- odbcConnect('PostgreSQL');
+c <- odbcConnect('BacLog');
+
+d <- sqlQuery(c,"
+SELECT Log.time,Devices.device,Devices.name,Objects.type,Objects.instance,Log.value,Objects.name 
+FROM Log JOIN Devices USING (IP,port) 
+JOIN Objects USING (deviceID,type,instance) 
+WHERE Devices.last IS NULL
+AND device=9040 AND type=0 AND instance=1
+-- AND age(NOW(),time) < interval '00:01:30'
+")
+
+xyplot(value~time,d,type='l')
+
+
+#### Historical.
+
 
 ## Meta information
 d <- 
@@ -33,8 +48,6 @@ max(diff(s$value[-1]) %% 131071)
 plot( 
 	(diff(s$value[-1]) %% 131071) / as.real(diff(s$time)[-length(s)]) *60 
 )
-
-
 
 
 xyplot(pmax(0,diff(value))~time,s,type='l')
