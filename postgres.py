@@ -174,7 +174,7 @@ class GetDevices(Task):
             query=Query("SELECT objectID,type,instance,name FROM Objects WHERE deviceID=%s" % (d.id))
             response=yield query
             for o in response:
-                d.objects.append(object.Object(*o))
+                d.objects.append(objects.Object(*o))
             
 
 ## Insert Queries (basic)
