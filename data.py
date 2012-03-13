@@ -6,7 +6,7 @@ from stream import Instance, InstanceList
   
 class Database:
 
-    database='mtim'
+    database='baclog'
 
     def __init__(self):
         self.db=psycopg2.connect(database=self.database)
@@ -23,7 +23,12 @@ class Database:
     
     def getObjects(self):
         cur=self.db.cursor()
-        cur.execute("SELECT device,type,instance ,Objects.name,Objects.description FROM Devices JOIN Objects USING (deviceID)")
+        cur.execute("""
+        SELECT device,type,instance ,Objects.name,Objects.description
+        FROM Objects 
+        JOIN Devices USING (deviceID) 
+        WHERE Devices.last IS NULL 
+        """)
         objects=InstanceList()
         for r in cur:
             device,otype,oinstance,name,description=r

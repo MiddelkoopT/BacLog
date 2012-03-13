@@ -58,10 +58,14 @@ class Building:
 class PughHall(Building):
     ## Rename
     replaceUnits=[
+                  ## Series 1
                   ('ROOMTRO1A.VAV127','ROOMTRO2A.VAV124'), # (RV)
                   ('ROOMTRO1A.VAV128','ROOMTRO3A.VAV147'), # (RV)
                   ('ROOM200.VAV127','ROOM250.VAV127'),     # (R)
                   ('PMPMROOM.VAV104','ROOMTRO1A.VAV104'),  # (R)
+                  ## Series 2
+                  ('RM200.VAV127','RM250.VAV127'),     # 
+                  ('PMPROOM.VAV104','RMTRO1A.VAV104'),  #
                    ]         
     
     def _tag(self,instance):
@@ -78,9 +82,9 @@ class PughHall(Building):
                 instance.setTag('descriptor',r.group(3))
 
         ## Room (rooms can have letters in them!)
-        for r in re.finditer('[\._]ROOM(\d+\w*)[\._]', name):
-            instance.setTag('room',r.group(1))
-            instance.setTag('space',r.group(1))
+        for r in re.finditer('[\._]R(OO)?M(\d+\w*)[\._]', name):
+            instance.setTag('room',r.group(2))
+            instance.setTag('space',r.group(2))
         
         ## Find Corridor
         for r in re.finditer('[\._](C\d+\w*)[\._]', name):
@@ -88,9 +92,9 @@ class PughHall(Building):
             instance.setTag('space',r.group(1))
 
         ## Find Telcom
-        for r in re.finditer('[\._]ROOM(TRO\d+\w*)[\._]', name):
-            instance.setTag('closet',r.group(1))
-            instance.setTag('space',r.group(1))
+        for r in re.finditer('[\._]R(OO)?M(TRO\d+\w*)[\._]', name):
+            instance.setTag('closet',r.group(2))
+            instance.setTag('space',r.group(2))
             
         ## AHU and other numbered units
         for r in re.finditer('[\._](AHU|VAV|VFD)(\d+)', name):

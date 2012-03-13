@@ -1,5 +1,5 @@
--- BacLog Copyright 2010,2011 by Timothy Middelkoop licensed under the Apache License 2.0
--- Database Schema
+-- BacLog Copyright 2010-2012 by Timothy Middelkoop licensed under the Apache License 2.0
+-- Database Schema v3+
 
 -- BACnet device at the time of use (IP devices)
 DROP TABLE IF EXISTS Devices;
@@ -58,3 +58,25 @@ CREATE TABLE Log (
 );
 
 CREATE INDEX i_Log_time ON Log (time);
+
+-- Control program
+DROP TABLE IF EXISTS Control;
+CREATE TABLE Control (
+	controlID SERIAL,					-- control ID - order of control
+	objectID integer,					-- object/device to control
+	active timestamp with time zone,	-- set value after this time
+	until timestamp with time zone,		-- do not set after this value
+	value real,							-- set to value
+	CONSTRAINT Control_PK PRIMARY KEY (controlID)
+);
+
+-- Commands
+DROP TABLE IF EXISTS Commands;
+CREATE TABLE Commands (
+	controlID integer,					-- commanded control
+	next integer,						-- next command
+	time timestamp with time zone,		-- time command issued
+	cleared timestamp with time zone,	-- value cleared
+	CONSTRAINT Command_PK PRIMARY KEY (controlID)
+	
+);
