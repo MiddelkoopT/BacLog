@@ -21,7 +21,8 @@ class Device:
         return "{Device@%s(%s,%s,%s)}" % (self.id or '',self.IP,self.port,self.device)
     
 class Object:
-    def __init__(self,objectID,type,instance,name):
+    def __init__(self,deviceID,objectID,type,instance,name):
+        self.deviceID=deviceID
         self.id=objectID
         self.type=type
         self.instance=instance

@@ -10,7 +10,7 @@ import scheduler
 import message
 import service
 
-from objects import Object
+from objects import Object, Device
 
 import console
 import postgres as database
@@ -27,6 +27,7 @@ class Ping(Task):
         for i in range(1,10):
             ping=yield scheduler.Wait(1)
             print "Ping>",i,ping
+
 
 class GetPresentValue(Task):
     def run(self):
@@ -87,6 +88,8 @@ class FindObjects(Task):
 
     def init(self,devices):
         self.devices=devices
+        self.deviceid={}
+        self.objectid={}
         
     def run(self):
         ioObjectTypes=[
@@ -105,6 +108,7 @@ class FindObjects(Task):
             name=response.message.value._value
             response=yield database.Device(target.IP,target.port,target.device,name)
             deviceID,=response.pop()
+            self.deviceid[deviceID]=Device(target.IP,target.port,target.device,deviceID)
             
             objects=[]
             index=0
@@ -129,7 +133,9 @@ class FindObjects(Task):
                 if debug: print "FindObjects> name:", name, description
                 response=yield database.Object(deviceID,o.type,o.instance,name,description)
                 objectID,=response.pop()
-                target.objects.append(Object(objectID,o.type,o.instance,name))
+                o=Object(deviceID,objectID,o.type,o.instance,name)
+                target.objects.append(o)
+                self.objectid[objectID]=o
                 
             if debug: print "FindObjects> ** device end:",target.device
 
@@ -145,8 +151,95 @@ class COVNotification(Task):
             response=yield database.Log(response.stamp,response.remote[0],response.remote[1],
                                         m.object.type,m.object.instance,m.values.presentValue._get())
 
+## BacSet Queries
+
+class Scheduler(scheduler.Task):
+    
+    def init(self,dbl,dbs,deviceid,objectid):
+        self.dbl=dbl
+        self.dbs=dbs
+        self.deviceid=deviceid
+        self.objectid=objectid
+
+    def run(self):
+        while True:
+            ping=yield scheduler.Wait(1)
+            assert ping==True
+            ## getScheduleID
+            when=database.now()
+            
+            query=database.Query("SELECT COALESCE(MAX(scheduleID),0) FROM Control")
+            result = yield query
+            scheduleID,=result[0]
+            #if trace: print "Scheduler> scheduleID", scheduleID
+            ## getSchedule
+            query=database.Query("""
+                SELECT scheduleID,objectID,value,active,until FROM Schedule
+                WHERE scheduleID > %s
+                ORDER BY scheduleID
+            """, scheduleID)
+            result = yield query.handler(self.dbs)
+            scheduleID=None ## out of scope errors
+            for sid,oid,value,active,until in result:
+                print "Scheduler> getSchedule", sid,oid,value
+                ## setControl
+                query=database.Query("""
+                    INSERT INTO Control 
+                    (scheduleID,objectID,active,until,value,enable,disable) VALUES 
+                    (%s,%s,%s,%s,%s,FALSE,FALSE)
+                    """, sid,oid,active,until,value)
+                
+                result = yield query
+                assert result==1
+                #print "Scheduler> setControl", value
+
+            ## getEnable   
+            query=database.Query("""
+                SELECT scheduleID, objectID, value FROM ( 
+                  SELECT MAX(scheduleID) AS scheduleID FROM Control
+                  WHERE %s>active AND %s<until AND enable=FALSE and disable=FALSE
+                  GROUP BY objectID ) AS selected
+                JOIN Control USING (scheduleID)
+                """, when,when)
+            result = yield query
+            for sid,oid,value in result:
+                print "Scheduler> enable:", sid,oid,value
+                ## enableInstance
+                query=database.Query("""
+                    UPDATE Control SET enable=TRUE  WHERE scheduleID=%s;
+                    UPDATE Control SET disable=TRUE WHERE scheduleID<%s;
+                """, sid,sid)
+                result = yield query
+                assert result > 0
+                ## commandInstance
+                o=self.objectid[oid]
+                d=self.deviceid[o.deviceID]
+                result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,value)
+                assert result is not None
+ 
+            ## getDisable 
+            query=database.Query("""
+                SELECT scheduleID, objectID FROM Control
+                WHERE enable=TRUE AND disable=FALSE AND %s>until
+            """, when)
+            result = yield query
+            for sid,oid in result:
+                print "Scheduler> disable:", sid,oid,None
+                ## disableInstance
+                query=database.Query("""
+                    UPDATE Control SET disable=TRUE WHERE scheduleID=%s
+                """, sid)
+                result = yield query
+                assert result > 0
+                ## commandInstance
+                o=self.objectid[oid]
+                d=self.deviceid[o.deviceID]
+                result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,None)
+                assert result is not None
+
 
 #### Main Class
+
 
 class BacLog:
     def __init__(self):
@@ -166,8 +259,10 @@ class BacLog:
         self.scheduler=scheduler.init()
         self.mh=message.MessageHandler(bind,port)
         self.scheduler.addHandler(self.mh)
-        self.dbh=database.DatabaseHandler()
+        self.dbh=database.DatabaseHandler(port=config.getint('Database','baclogPort'))
         self.scheduler.addHandler(self.dbh)
+        self.dbs=database.DatabaseHandler(port=config.getint('Database','bacsetPort'))
+        self.scheduler.addHandler(self.dbs)
         
     def run(self):
         ## Setup scheduler
@@ -184,6 +279,8 @@ class BacLog:
             self.scheduler.add(task)
             self.scheduler.run()
             devices=task.devices
+            objectid=task.objectid
+            deviceid=task.deviceid
             
         if bootstrap or (not devices):
             ## Use local.ini to get devices.
@@ -192,6 +289,8 @@ class BacLog:
             objects=FindObjects(devices)
             scheduler.add(objects)
             scheduler.run()
+            objectid=objects.objectid
+            deviceid=objects.deviceid
 
         print "BacLog.run>", devices
         if trace:
@@ -219,7 +318,7 @@ class BacLog:
 
         cov_pid=scheduler.add(COVNotification())
         
-        ## Application
+        ## Applications
         
         if config.getboolean('Options','subscribeCOV'):
             lifetime=config.getint('Options','lifetime')
@@ -229,6 +328,8 @@ class BacLog:
                 cov.pid=cov_pid
                 cov.lifetime=lifetime
                 scheduler.add(cov)
+                
+        self.scheduler.add(Scheduler(self.dbh,self.dbs,deviceid,objectid))
                 
         #for target in devices:
         #    scheduler.add(WritePresentValue(target.address))

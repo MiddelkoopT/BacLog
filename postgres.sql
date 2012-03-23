@@ -56,8 +56,25 @@ CREATE TABLE Log (
 	status integer, 					-- what happened COV/ERROR etc.
 	value real 							-- recorded value
 );
-
 CREATE INDEX i_Log_time ON Log (time);
+
+-- Saftey/Enable table (BacLog)
+DROP TABLE IF EXISTS Watches;
+CREATE TABLE Watches (
+	objectID integer,
+	stop_low real,
+	warn_low real,
+	warn_high real,
+	stop_high real,
+	enabled boolean,					-- Point can be commanded, released otherwise
+	warning boolean,					-- Point is in warn range.
+	stopped boolean,					-- Point has errored out and point released.
+	CONSTRAINT Watches_PK PRIMARY KEY (objectID)
+);
+
+
+-- BacSet Tables
+
 
 -- Schedule program (Bacset side)
 DROP TABLE IF EXISTS Schedule;
@@ -79,7 +96,7 @@ CREATE TABLE Control (
 	until timestamp with time zone,		-- control end
 	value integer,						-- control value
 	enable boolean,						-- control active
-	disable boolean,						-- control overriden or released
+	disable boolean,					-- control overriden or released
 	CONSTRAINT Control_PK PRIMARY KEY (scheduleID)
 );
 
@@ -100,5 +117,5 @@ CREATE TABLE Commands (
 	verified boolean,					-- True if unit is at commanded value, NULL indicates no attempt.
 	CONSTRAINT Command_PK PRIMARY KEY (commandID)
 );
-
 CREATE INDEX i_Commands_time ON Commands (time);
+

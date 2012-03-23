@@ -4,12 +4,17 @@
 import types
 import time
 import psycopg2.extras
-from scheduler import Task
+import scheduler
 
 import objects
 
 debug=False
 trace=False
+
+## Utility functions
+def now(offset=0):
+    return psycopg2.TimestampFromTicks(time.time()+offset)        
+
 
 ## Asynchronous interface
     
@@ -21,6 +26,10 @@ class Query:
         self.query=query
         self.param=args
         if debug: print "Query>",query,args #,self._handler
+        
+    def handler(self,handler):
+        self._handler=handler
+        return self
         
     def execute(self):
         conn=self._handler.conn
@@ -38,7 +47,6 @@ class Query:
     
     def close(self):
         self.cursor.close() ## accesses FD
-        
 
 class DatabaseHandler:
     """Database IO handler for scheduler class"""
@@ -48,15 +56,15 @@ class DatabaseHandler:
     POLL_ERROR=psycopg2.extensions.POLL_ERROR   # 3
     IDLE,WAIT,EXECUTE,FETCH,CLOSE,COMMIT = range(6)
     
-    def __init__(self,database='baclog'):
-        if trace: print "DatabaseHandler>", database
+    def __init__(self,port=5432,database='baclog'):
+        if trace: print "DatabaseHandler>", port, database
         
         ## Handler API
         self._send=[]
         self._recv=[]
 
         ## Database
-        self.conn=psycopg2.connect(database=database,async=1)
+        self.conn=psycopg2.connect(database=database,port=port,async=1)
         if debug: print "DatabaseHandler>", self.conn
         psycopg2.extras.wait_select(self.conn) ## Block; connections are expensive anyways.
         self.cur=self.conn.cursor() ## Private handler cursor
@@ -160,22 +168,29 @@ class DatabaseHandler:
 
 ## Database Tasks
 
-class GetDevices(Task):
+class GetDevices(scheduler.Task):
     devices=None
+    objectid=None
+    deviceid=None
     def run(self):
         query=Query("SELECT deviceID,IP,port,device FROM Devices WHERE last IS NULL")
         response=yield query
         self.devices=[]
+        self.deviceid={}
+        self.objectid={}
         for deviceID,IP,port,device in response:
             device=objects.Device(IP,port,device,deviceID)
             self.devices.append(device)
+            self.deviceid[deviceID]=device
         if debug: print "postgres.GetDevices>", self.devices
         for d in self.devices:
             query=Query("SELECT objectID,type,instance,name FROM Objects WHERE deviceID=%s" % (d.id))
             response=yield query
-            for o in response:
-                d.objects.append(objects.Object(*o))
-            
+            for objectID,otype,oinstance,name in response:
+                o=objects.Object(d.id,objectID,otype,oinstance,name)
+                d.objects.append(o)
+                self.objectid[objectID]=o
+
 
 ## Insert Queries (basic)
 
@@ -205,12 +220,23 @@ INSERT INTO Devices (first,IP,port,device,name) VALUES (%s,%s,%s,%s,%s)
                        now,IP,port,device,
                        now,IP,port,device,name)
 
+class Command(Query):
+    def __init__(self,scheduleID,IP,port,device,otype,oinstance,value,priority=12):
+        query="""
+            INSERT INTO Commands 
+            (time,scheduleID,IP,port,device,type,instance,value,priority) VALUES 
+            (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING commandID
+        """
+        now=psycopg2.TimestampFromTicks(time.time())
+        Query.__init__(self,query, 
+                       now,scheduleID,IP,port,device,otype,oinstance,value,priority)
 
 ## Synchronous Interface
 
 class Database:
-    def __init__(self,database='baclog'):
-        self.conn=psycopg2.connect(database=database)
+    def __init__(self,port=5432,database='baclog'):
+        self.conn=psycopg2.connect(port=port,database=database)
         self.database=database
 
     def query(self,query):
