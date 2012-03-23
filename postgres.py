@@ -221,7 +221,7 @@ INSERT INTO Devices (first,IP,port,device,name) VALUES (%s,%s,%s,%s,%s)
                        now,IP,port,device,name)
 
 class Command(Query):
-    def __init__(self,scheduleID,IP,port,device,otype,oinstance,value,priority=12):
+    def __init__(self,scheduleID,IP,port,device,otype,oinstance,value,priority):
         query="""
             INSERT INTO Commands 
             (time,scheduleID,IP,port,device,type,instance,value,priority) VALUES 

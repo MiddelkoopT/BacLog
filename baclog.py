@@ -41,25 +41,27 @@ class GetPresentValue(Task):
                                         m.object.type,m.object.instance,m.value._value._value)
 
 
-class WritePresentValue(Task):
-    
-    def init(self,target):
-        self.target=target
-    
-    def run(self):
-        value=False
-        for i in range(0,10):
-            value=not value
-            wpv=bacnet.WriteProperty()
-            wpv._new()
-            wpv.object._set('binaryOutput',20)
-            wpv.property._set(bacnet.PropertyIdentifier.presentValue)
-            wpv.index=None
-            wpv.value=bacnet.Property(value,ptype=bacnet.BinaryPV)
-            wpv.priority._set(12)
-            print "WritePresentValue>",i,wpv
-            ack=yield Message(self.target,wpv)
-            print ack
+def WritePresentValue(target,otype,oinstance,value,priority):
+    wpv=bacnet.WriteProperty()
+    wpv._new()
+    wpv.object._set(otype,oinstance)
+    wpv.property._set(bacnet.PropertyIdentifier.presentValue)
+    wpv.index=None
+    wpv.value=bacnet.Property(value,ptype=bacnet.BinaryPV) ## TODO: Fixed right now
+    wpv.priority._set(priority)
+    print "WritePresentValue>",wpv
+    return Message(target,wpv)
+
+def ReleasePresentValue(target,otype,oinstance,priority):
+    wpv=bacnet.WriteProperty()
+    wpv._new()
+    wpv.object._set(otype,oinstance)
+    wpv.property._set(bacnet.PropertyIdentifier.presentValue)
+    wpv.index=None
+    wpv.value=bacnet.Property(None,ptype=tagged.Null)
+    wpv.priority._set(priority)
+    print "ReleasePresentValue>",wpv
+    return Message(target,wpv)
             
 
 class SubscribeCOV(Task):
@@ -151,7 +153,10 @@ class COVNotification(Task):
             response=yield database.Log(response.stamp,response.remote[0],response.remote[1],
                                         m.object.type,m.object.instance,m.values.presentValue._get())
 
-## BacSet Queries
+## BacSet Scheduler
+
+
+
 
 class Scheduler(scheduler.Task):
     
@@ -160,8 +165,10 @@ class Scheduler(scheduler.Task):
         self.dbs=dbs
         self.deviceid=deviceid
         self.objectid=objectid
+        self.priority=13
 
     def run(self):
+        priority=self.priority
         while True:
             ping=yield scheduler.Wait(1)
             assert ping==True
@@ -214,7 +221,9 @@ class Scheduler(scheduler.Task):
                 ## commandInstance
                 o=self.objectid[oid]
                 d=self.deviceid[o.deviceID]
-                result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,value)
+                result = yield WritePresentValue((d.IP,d.port), o.type, o.instance, value, priority)
+                print "Scheduler> commandInstance", result
+                result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,value,priority)
                 assert result is not None
  
             ## getDisable 
@@ -234,7 +243,9 @@ class Scheduler(scheduler.Task):
                 ## commandInstance
                 o=self.objectid[oid]
                 d=self.deviceid[o.deviceID]
-                result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,None)
+                result = yield ReleasePresentValue((d.IP,d.port), o.type, o.instance, priority)
+                print "Scheduler> commandInstance", result
+                result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,None,priority)
                 assert result is not None
 
 
@@ -331,9 +342,6 @@ class BacLog:
                 
         self.scheduler.add(Scheduler(self.dbh,self.dbs,deviceid,objectid))
                 
-        #for target in devices:
-        #    scheduler.add(WritePresentValue(target.address))
-
         ## Run scheduler.
         print "BacLog.run> run"
         scheduler.run()

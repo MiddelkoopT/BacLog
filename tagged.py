@@ -218,6 +218,30 @@ class Unsigned8(Unsigned):
 class Float(Tagged):
     _format='!f'
 
+class Null(Tagged):
+    _format='B'
+    _num=0 ## Application tag number
+    
+    def _encode(self,tagnum=None):
+        assert self._value is None ## Null value
+        if tagnum==None: ## encode as an application tag
+            return self._setTag(0x0,0,0)
+        else:
+            return self._setTag(tagnum,1,1)+struct.pack('!'+'B',0)
+
+    def _decode(self, data):
+        num,cls,lvt=self._getTag() #@UnusedVariable
+        if cls==0:
+            assert num==0 ## application tag.
+            assert lvt==0 ## NULL
+        else:
+            assert False ## context not supported
+
+    def __repr__(self):
+        assert self._value==None
+        return '<Null>'
+
+
 class Boolean(Tagged):
     _format='B'
     _num=1 ## Application tag (Boolean encoded as application differently)
@@ -251,6 +275,7 @@ class Boolean(Tagged):
             return '<False>'
         else:
             return '<None>'
+
 
 class String(Tagged):
     def _encode(self):
@@ -362,7 +387,7 @@ class Property(Tagged):
 
     _propertymap=None ## delayed initialization
     _application=[
-                  None,             # [A0] NULL
+                  Null,             # [A0] NULL
                   Boolean,          # [A1] Boolean
                   Unsigned,         # [A2] Unsigned
                   None,             # [A3] Integer
