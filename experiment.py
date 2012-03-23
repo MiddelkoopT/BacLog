@@ -11,44 +11,65 @@ trace=False
 
 class Experiment:
 
-    def run(self):
-        print "Experiment.run>"
+    def runTest(self):
+        print "Experiment.runTest>"
         
         ## main objects
         db=Database()
-        
-        ## populate meta information
         objects=db.getObjects()
-        #building=buildings.PughHall()
         building=buildings.Test()
         building.tag(objects)
         #building.check(objects)
-        
-        ## Setup Metadata
-        db.writeTags(objects)
-        
+
         ## Identify tags and set watch to enabled 
+        o19=objects.getTag('point',19).single()
         o20=objects.getTag('point',20).single()
         o21=objects.getTag('point',21).single()
-        db.enablePoints([o20,o21])
+        test=[o19,o20,o21]
+        db.enablePoints(test)
         
         ## Schedule object.
         t=db.now()
+        db.scheduleObject(o19, t+1, 3, 51)
         
-        if True:
-            db.scheduleObject(o20, t+1 , 2, 1)
-            db.scheduleObject(o20, t+4 , 1, 1)
-            db.scheduleObject(o20, t+7 , 1, 1)
-            db.scheduleObject(o20, t+6 , 3, 1)
-            
-            db.scheduleObject(o21, t+2 , 5, 1)
-        
+#        db.scheduleObject(o20, t+1 , 2, 1)
+#        db.scheduleObject(o20, t+4 , 1, 1)
+#        db.scheduleObject(o20, t+7 , 1, 1)
+#        db.scheduleObject(o20, t+6 , 3, 1)
+#        
+#        db.scheduleObject(o21, t+2 , 5, 1)
+
         db.close()
+
+    def runPughHall(self):
+        print "Experiment.runPughHall>"
         
-        ## Monitor section
+        ## main objects
+        db=Database()
+        objects=db.getObjects()
+        building=buildings.PughHall()
+        building.tag(objects)
+        #building.check(objects)
+
+        ## Identify tags and set watch to enabled 
+        rooms=objects.getTag('room',['104','105'])
+        print rooms
+        db.enablePoints(rooms)
         
+        ## Schedule object.
+#        t=db.now()
+        
+#        db.scheduleObject(o20, t+1 , 2, 1)
+#        db.scheduleObject(o20, t+4 , 1, 1)
+#        db.scheduleObject(o20, t+7 , 1, 1)
+#        db.scheduleObject(o20, t+6 , 3, 1)
+#        
+#        db.scheduleObject(o21, t+2 , 5, 1)
+        
+
+        db.close()
         
 
 ## entry point
 if __name__=='__main__':
-    Experiment().run()
+    Experiment().runTest()

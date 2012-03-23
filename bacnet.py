@@ -2,7 +2,7 @@
 
 import tagged
 
-from tagged import Unsigned32, Unsigned16, Unsigned8, Unsigned, Boolean, String 
+from tagged import Float, Unsigned32, Unsigned16, Unsigned8, Unsigned, Boolean, String 
 from tagged import ObjectIdentifier, Property, Enumerated, Bitstring, Sequence, SequenceOf, Array, Empty
 
 
@@ -279,6 +279,16 @@ PropertyMap={
              'APDURetries':Unsigned,
              'description':String,
              }
+
+
+PropertyTypeMap={
+                 0: Float,       # analogInput
+                 1: Float,       # analogOutput
+                 2: None,        # analogValue
+                 3: BinaryPV,    # binaryInput
+                 4: BinaryPV,    # binaryOutput
+                 5: None,        # binaryValue
+                 }
 
 
 ## Create generated classes/dictionaries

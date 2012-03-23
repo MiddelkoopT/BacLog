@@ -152,7 +152,10 @@ class Tagged:
         '''Default fixed formatting found in self._format'''
         data=struct.Struct('!'+self._format)
         length=data.size
-        return self._setTag(tagnum,1,length)+data.pack(self._value)
+        if tagnum==None:
+            return self._setTag(self._num,0,length)+data.pack(self._value)
+        else:
+            return self._setTag(tagnum,1,length)+data.pack(self._value)
 
     def __repr__(self):
         return "<%s>" % self._value
@@ -216,7 +219,8 @@ class Unsigned8(Unsigned):
     _size=1
 
 class Float(Tagged):
-    _format='!f'
+    _format='f'
+    _num=4          # application tag number
 
 class Null(Tagged):
     _format='B'
@@ -402,15 +406,18 @@ class Property(Tagged):
                   ObjectIdentifier, # [A12] ObjectIdentifier
                   ] ## Application map
     
-    def _init(self,identifier=None,application=None,ptype=None):
+    def _init(self,identifier=None,application=None,ptype=None,otype=None):
         if identifier:
             self._identifier=identifier
             self._type=self._propertymap.get(identifier._value,None)
         if application:
             assert application in self._application ## unsupported application
             self._type=application
+        assert not (ptype!=None and otype!=None) ## cannot set ptype and otype
         if ptype:
             self._type=ptype
+        if otype:
+            self._type=ptype=bacnet.PropertyTypeMap[otype]
         
     def _new(self):
         if self._type!=None and issubclass(self._type, (Array,SequenceOf)):

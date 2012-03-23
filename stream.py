@@ -182,9 +182,14 @@ class InstanceList:
                 if not o.hasTag(tag):
                     result.add(o)
         else:
-            for o in self.objects:
-                if o.hasTag(tag) and value==o.getTag(tag):
-                    result.add(o)
+            if type(value)==type([]):
+                for o in self.objects:
+                    if o.hasTag(tag) and (o.getTag(tag) in value):
+                        result.add(o)
+            else:
+                for o in self.objects:
+                    if o.hasTag(tag) and value==o.getTag(tag):
+                        result.add(o)
         return result
 
     def getTags(self,tags):

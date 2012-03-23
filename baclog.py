@@ -46,8 +46,7 @@ def WritePresentValue(target,otype,oinstance,value,priority):
     wpv._new()
     wpv.object._set(otype,oinstance)
     wpv.property._set(bacnet.PropertyIdentifier.presentValue)
-    wpv.index=None
-    wpv.value=bacnet.Property(value,ptype=bacnet.BinaryPV) ## TODO: Fixed right now
+    wpv.value=bacnet.Property(value,otype=otype)
     wpv.priority._set(priority)
     print "WritePresentValue>",wpv
     return Message(target,wpv)
@@ -220,7 +219,7 @@ class Scheduler(scheduler.Task):
                 """,    sid,oid,
                         sid,oid)
                 result = yield query
-                assert result > 0
+                assert result >= 0
                 ## commandInstance
                 o=self.objectid[oid]
                 d=self.deviceid[o.deviceID]
