@@ -21,13 +21,14 @@ class Device:
         return "{Device@%s(%s,%s,%s)}" % (self.id or '',self.IP,self.port,self.device)
     
 class Object:
-    def __init__(self,deviceID,objectID,type,instance,name):
+    def __init__(self,deviceID,objectID,otype,oinstance,name):
         self.deviceID=deviceID
         self.id=objectID
-        self.type=type
-        self.instance=instance
+        self.type=otype
+        self.instance=oinstance
+        self.objectIdentifier=tagged.ObjectIdentifier(otype,oinstance)
         self.name=name
-        self.objectIdentifier=tagged.ObjectIdentifier(type,instance)
+        self.enabled=False
 
     def __repr__(self):
         return "{Object@%s(%d,%d)|%s|" % (self.id or '',self.type,self.instance,self.name)

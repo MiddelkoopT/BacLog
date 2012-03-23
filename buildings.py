@@ -17,7 +17,7 @@ class Building:
     def check(self,instances):
         ## QC check 
         print "untagged", instances.getTagsNot(['room','corridor','closet','mechanical','ahu','pump'])
-        print '!descriptor',instances.getTagNot('descriptor')
+        print '!attr',instances.getTagNot('attr')
 
         print "!building", instances.getTagNot('building')
         print '!vav',instances.getTagsNot(['room','corridor','closet','mechanical']).getTag('vav')
@@ -61,16 +61,27 @@ class Test(Building):
         print "Test.tag>", name
 
         for r in re.finditer('^P(\d+)', name):
-            instance.setTag('point',int(r.group(1)))
-            instance.setTag('unit',name)
+            p=int(r.group(1))
+            instance.setTag('point',p)
+
+            instance.setTag('campus','uf')
+            instance.setTag('building',24)
+            instance.setTag('unit','pxc')
+            instance.setTag('num','379')
+            instance.setTag('attr','point')
+            instance.setTag('index',str(p))
+
+            instance.setTag('nn',"uf.24.pxc.379.point.%d" % p)
             
         if instance.otype==3:
             instance.setTag('input',True)
-            instance.setTag('descriptor','input')
+            instance.setTag('attr','input')
+            instance.setTag('nn',"uf.24.pxc.379.input.%d" % p)
 
         if instance.otype==4:
             instance.setTag('output',True)
-            instance.setTag('descriptor','output')
+            instance.setTag('attr','output')
+            instance.setTag('nn',"uf.24.pxc.379.output.%d" % p)
 
 
 class PughHall(Building):
@@ -93,11 +104,11 @@ class PughHall(Building):
         for r in re.finditer('^B(\d+)[\._:]', name):
             instance.setTag('building',int(r.group(1)))
             
-        ## Derive unit and descriptor/address from name
+        ## Derive unit and attr/address from name
         for r in re.finditer('^B\d+[\._]([A-Z\d_\.]+)([:-]([A-Z\d \.-]+))?$', name):
             instance.setTag('unit',r.group(1))
             if r.group(2):
-                instance.setTag('descriptor',r.group(3))
+                instance.setTag('attr',r.group(3))
 
         ## Room (rooms can have letters in them!)
         for r in re.finditer('[\._]R(OO)?M(\d+\w*)[\._]', name):
@@ -148,7 +159,7 @@ class PughHall(Building):
             for r in re.finditer('^B\d+[\._]([A-Z\d_\.]+)([\.]([A-Z\d \.-]+))?$', name):
                 instance.setTag('unit',r.group(1))
                 if r.group(2):
-                    instance.setTag('descriptor',r.group(3))
+                    instance.setTag('attr',r.group(3))
             
         #### Derived information
         

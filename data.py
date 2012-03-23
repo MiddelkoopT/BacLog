@@ -2,6 +2,7 @@
 ## Analysis Data
 
 import time
+import types
 import psycopg2
 
 from stream import Instance, InstanceList
@@ -49,7 +50,7 @@ class Database:
             self.objectid[objectid]=o
         cur.close()
         return objects
-    
+        
     def getInstance(self,*args):
         ''' Get instance by (device,otype,oinstance)'''
         if len(args)==1:
@@ -66,6 +67,24 @@ class Database:
         
         return Results(cur);
 
+    def writeTags(self,objects):
+        cur=self.db.cursor()
+        for o in objects:
+            print "Database.writeTags>", o
+            cur.execute("DELETE FROM Tags WHERE objectID=%s", (o.id,))
+            for tag,value in o.tags.items():
+                print "#", tag,value
+                cur.execute("INSERT INTO Tags (objectID,tag,value) VALUES (%s,%s,%s)", (o.id,tag,value))
+        cur.close()
+
+    def enablePoints(self,objects):
+        cur=self.db.cursor()
+        for o in objects:
+            print "Database.enablePoints>", o
+            cur.execute("DELETE FROM Watches WHERE objectID=%s", (o.id,))
+            cur.execute("INSERT INTO Watches (objectID,enabled) VALUES (%s,TRUE)", (o.id,))
+        cur.close()
+
     def scheduleObject(self,instance,when,duration,value):
         _when=psycopg2.TimestampFromTicks(when)
         _until=psycopg2.TimestampFromTicks(when+duration)
@@ -80,85 +99,6 @@ class Database:
         print "Database.scheduleObject>", scheduleID, instance, value 
         return scheduleID
     
-    def getLastControl(self):
-        cur=self.db.cursor()
-        cur.execute("SELECT COALESCE(MAX(scheduleID),0) FROM Control")
-        return cur.fetchone()
-
-    def getSchedule(self):
-        '''Get object that are not yet controlled'''
-        cur=self.db.cursor()
-        cur.execute("""
-        SELECT scheduleID,objectID,value,active,until FROM Schedule
-        WHERE scheduleID > %s
-        ORDER BY scheduleID
-        """, self.getLastControl())
-        return cur.fetchall()
-    
-    def setControl(self,scheduleID,objectID,active,until,value):
-        '''Control a point (instance) to value; current schedule'''
-        cur=self.db.cursor()
-        cur.execute("""
-        INSERT INTO Control 
-        (scheduleID,objectID,active,until,value,enable,disable) VALUES 
-        (%s,%s,%s,%s,%s,FALSE,FALSE)
-        """, (scheduleID,objectID,active,until,value))
-        
-    def getEnable(self,when=None):
-        '''Get what should be control at when'''
-        if when==None:
-            when=psycopg2.TimestampFromTicks(time.time())
-        cur=self.db.cursor()
-        cur.execute("""
-        SELECT scheduleID, objectID, value FROM ( 
-          SELECT MAX(scheduleID) AS scheduleID FROM Control
-          WHERE %s>active AND %s<until AND enable=FALSE and disable=FALSE
-          GROUP BY objectID ) AS selected
-        JOIN Control USING (scheduleID)
-        """, (when,when))
-        return cur.fetchall()
-    
-    def enableInstance(self,scheduleID):
-        '''Turn on enable bit of schedule'''
-        cur=self.db.cursor()
-        cur.execute("""
-        UPDATE Control SET enable=TRUE  WHERE scheduleID=%s;
-        UPDATE Control SET disable=TRUE WHERE scheduleID<%s; -- AND enable=TRUE;
-        """, (scheduleID,scheduleID))
-
-    def getDisable(self,when=None):
-        '''Get active control'''
-        if when==None:
-            when=psycopg2.TimestampFromTicks(time.time())
-        cur=self.db.cursor()
-        cur.execute("""
-        SELECT scheduleID, objectID FROM Control
-        WHERE enable=TRUE AND disable=FALSE AND %s>until
-        """, (when,))
-        return cur.fetchall()
-
-    def disableInstance(self,scheduleID):
-        '''Turn on disable bit of schedule'''
-        cur=self.db.cursor()
-        cur.execute("""
-        UPDATE Control SET disable=TRUE WHERE scheduleID=%s
-        """, (scheduleID,))
-
-    def commandInstance(self,scheduleID,instance,value,when=None):
-        '''Command object to value'''
-        if when==None:
-            when=psycopg2.TimestampFromTicks(time.time())
-        cur=self.db.cursor()
-        cur.execute("""
-        INSERT INTO Commands 
-        (time,scheduleID,device,type,instance,value,priority) VALUES 
-        (%s,%s,%s,%s,%s,%s,12)
-        RETURNING commandID
-        """, (when,scheduleID,instance.device,instance.otype,instance.oinstance,value))
-        commandID=cur.fetchone()[0]
-        print "Database.commandObject>", when, scheduleID, instance, value 
-        return commandID
-        
     def now(self,offset=0):
         '''Return current ticks + offset'''
         return time.time()+offset

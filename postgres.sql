@@ -1,5 +1,5 @@
 -- BacLog Copyright 2010-2012 by Timothy Middelkoop licensed under the Apache License 2.0
--- Database Schema v3+
+-- Database Schema v4
 
 -- BACnet device at the time of use (IP devices)
 DROP TABLE IF EXISTS Devices;
@@ -19,14 +19,19 @@ CREATE TABLE Devices (
 DROP TABLE IF EXISTS Points;
 CREATE TABLE Points ( 
 	pointID SERIAL, 					-- Internal point ID
-	name varchar, 						-- Full point name
-	building char(32), 					-- Building Name
-	room char(32), 						-- Room number/location
-	unit char(32), 						-- Sensor, actuator, or device name/number
-	description varchar, 				-- Description example: ROOM TEMP
+	campus char(8),						-- Campus identifier
+	building integer, 					-- Building Number
 	first timestamp with time zone, 	-- first seen
 	last timestamp  with time zone, 	-- valid until (NULL indicates live point)
 	CONSTRAINT Points_PK PRIMARY KEY (pointID)
+);
+
+DROP TABLE IF EXISTS Tags;
+CREATE TABLE Tags (
+	objectID integer,
+	tag char(8),
+	value varchar,
+	CONSTRAINT Tags_PK PRIMARY KEY (objectID,tag)
 );
 
 -- BACnet points at the time of use.

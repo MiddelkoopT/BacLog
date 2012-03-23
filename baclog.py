@@ -202,20 +202,23 @@ class Scheduler(scheduler.Task):
 
             ## getEnable   
             query=database.Query("""
-                SELECT scheduleID, objectID, value FROM ( 
+                SELECT scheduleID, objectID, value, enabled FROM ( 
                   SELECT MAX(scheduleID) AS scheduleID FROM Control
                   WHERE %s>active AND %s<until AND enable=FALSE and disable=FALSE
                   GROUP BY objectID ) AS selected
                 JOIN Control USING (scheduleID)
+                JOIN Watches USING (objectID)
+                WHERE enabled=TRUE
                 """, when,when)
             result = yield query
-            for sid,oid,value in result:
-                print "Scheduler> enable:", sid,oid,value
+            for sid,oid,value,enabled in result:
+                print "Scheduler> enable:", sid,oid,enabled,value
                 ## enableInstance
                 query=database.Query("""
-                    UPDATE Control SET enable=TRUE  WHERE scheduleID=%s;
-                    UPDATE Control SET disable=TRUE WHERE scheduleID<%s;
-                """, sid,sid)
+                    UPDATE Control SET enable=TRUE  WHERE scheduleID=%s AND objectID=%s;
+                    UPDATE Control SET disable=TRUE WHERE scheduleID<%s AND objectID=%s;
+                """,    sid,oid,
+                        sid,oid)
                 result = yield query
                 assert result > 0
                 ## commandInstance
@@ -302,6 +305,7 @@ class BacLog:
             scheduler.run()
             objectid=objects.objectid
             deviceid=objects.deviceid
+
 
         print "BacLog.run>", devices
         if trace:

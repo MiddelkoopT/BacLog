@@ -2,8 +2,6 @@
 ## BacLog Copyright 2012 by Timothy Middelkoop licensed under the Apache License 2.0
 ## Experiment code.
 
-from time import sleep
-
 from data import Database
 import buildings
 
@@ -26,18 +24,25 @@ class Experiment:
         building.tag(objects)
         #building.check(objects)
         
-        target=objects.getTag('descriptor','output')
-        print target
+        ## Setup Metadata
+        db.writeTags(objects)
+        
+        ## Identify tags and set watch to enabled 
+        o20=objects.getTag('point',20).single()
+        o21=objects.getTag('point',21).single()
+        db.enablePoints([o20,o21])
         
         ## Schedule object.
-        o=objects.getTag('point',21).single()
         t=db.now()
         
-        db.scheduleObject(o, t+1 , 2, 1)
-        db.scheduleObject(o, t+4 , 1, 1)
-        db.scheduleObject(o, t+7 , 1, 1)
-        db.scheduleObject(o, t+6 , 3, 1)
-
+        if True:
+            db.scheduleObject(o20, t+1 , 2, 1)
+            db.scheduleObject(o20, t+4 , 1, 1)
+            db.scheduleObject(o20, t+7 , 1, 1)
+            db.scheduleObject(o20, t+6 , 3, 1)
+            
+            db.scheduleObject(o21, t+2 , 5, 1)
+        
         db.close()
         
         ## Monitor section

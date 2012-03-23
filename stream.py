@@ -28,7 +28,10 @@ class Instance:
         output=["<%s,%s,%s" % (self.device,self.otype,self.oinstance)]
 
         if self.name is not None:
-            output.append("|%s:%s" % (self.tags.get('unit'),self.tags.get('descriptor')))
+            output.append("|%s.%s.%s.%s" % (self.tags.get('unit'),
+                                            self.tags.get('num'),
+                                            self.tags.get('attr'),
+                                            self.tags.get('index')))
             if trace and self.description:
                 output.append(';'+self.description)
         output.append(">@%s" % self.id)
