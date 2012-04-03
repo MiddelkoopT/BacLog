@@ -30,14 +30,15 @@ class Experiment:
         
         ## Schedule object.
         t=db.now()
-        db.scheduleObject(o19, t+1, 3, 51)
+#        db.scheduleObject(o19, t+1, 3, 51)
         
 #        db.scheduleObject(o20, t+1 , 2, 1)
 #        db.scheduleObject(o20, t+4 , 1, 1)
 #        db.scheduleObject(o20, t+7 , 1, 1)
 #        db.scheduleObject(o20, t+6 , 3, 1)
 #        
-#        db.scheduleObject(o21, t+2 , 5, 1)
+        db.scheduleObject(o21, t+1 , 10, 1)
+        db.scheduleObject(o21, t+3 , 5, None)
 
         db.close()
 

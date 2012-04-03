@@ -223,7 +223,10 @@ class Scheduler(scheduler.Task):
                 ## commandInstance
                 o=self.objectid[oid]
                 d=self.deviceid[o.deviceID]
-                result = yield WritePresentValue((d.IP,d.port), o.type, o.instance, value, priority)
+                if value is not None:
+                    result = yield WritePresentValue((d.IP,d.port), o.type, o.instance, value, priority)
+                else:
+                    result = yield ReleasePresentValue((d.IP,d.port), o.type, o.instance, priority)
                 print "Scheduler> commandInstance", result
                 result = yield database.Command(sid,d.IP,d.port,d.device,o.type,o.instance,value,priority)
                 assert result is not None
