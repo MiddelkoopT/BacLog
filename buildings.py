@@ -175,6 +175,9 @@ class PughHall(Building):
             instance.setTag('module',instance.oinstance/100)
             instance.setTag('address',instance.oinstance%100)
 
+        #### Device
+        instance.setTag('device',instance.device)
+
         #### Derived information
         
         ## ahu zone
