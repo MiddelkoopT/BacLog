@@ -277,7 +277,7 @@ class BacLog:
         self.scheduler.addHandler(self.mh)
         self.dbh=database.DatabaseHandler(port=config.getint('Database','baclogPort'))
         self.scheduler.addHandler(self.dbh)
-        self.dbs=database.DatabaseHandler(port=config.getint('Database','bacsetPort'))
+        self.dbs=database.DatabaseHandler(port=config.getint('Database','bacsetPort'),database='bacset')
         self.scheduler.addHandler(self.dbs)
         
     def run(self):

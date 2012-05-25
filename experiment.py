@@ -70,6 +70,23 @@ class Experiment:
 
         db.close()
         
+    def enablePughHall(self):
+        print "Experiment.enablePughHall>"
+        
+        ## main objects
+        db=Database()
+        objects=db.getObjects()
+        building=buildings.PughHall()
+        building.tag(objects)
+        #building.check(objects)
+
+        ## Identify tags and set watch to enabled 
+        rooms=objects.getTag('room',['104','105'])
+        print rooms
+        db.enablePoints(rooms)
+        
+        db.close()
+        
 
 ## entry point
 if __name__=='__main__':

@@ -10,9 +10,10 @@ from stream import Instance, InstanceList
 class Database:
 
     database='baclog'
+    port=5434
 
     def __init__(self):
-        self.db=psycopg2.connect(database=self.database)
+        self.db=psycopg2.connect(database=self.database,port=self.port)
         self.instance={}
         self.objectid={}
         
