@@ -7,7 +7,7 @@ rehash
 
 ## gator@ufl.edu and SVN password.
 install -dv BacLog && cd BacLog
-git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/projects/svn/BacLog
+git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/svn/projects/BacLog
 git svn fetch
 
 sudo su postgres -c 'createuser -d -s mtim'
@@ -50,7 +50,7 @@ sudo easy_install psycopg2
 ## BacLog SVN
 install -dv BacLog
 cd BacLog
-git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/projects/svn/BacLog
+git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/svn/projects/BacLog
 git svn fetch
 
 git branch -r
