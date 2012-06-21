@@ -14,6 +14,11 @@ CREATE TABLE Devices (
 	last timestamp  with time zone, 	-- valid until (NULL indicates live object)
 	CONSTRAINT Devices_PK PRIMARY KEY (deviceID)
 );
+CREATE INDEX i_Devices_IP_Port ON Devices (IP,port);
+CREATE INDEX i_Devices_device ON Devices (device);
+CREATE INDEX i_Devices_first ON Devices (first);
+CREATE INDEX i_Devices_last ON Devices (last);
+
 
 -- Points.  Physical equipment maped to an object a point in time.
 DROP TABLE IF EXISTS Points;
@@ -48,6 +53,10 @@ CREATE TABLE Objects (
 	last timestamp  with time zone, 	-- last time seen (NULL indicates live object)
 	CONSTRAINT Objects_PK PRIMARY KEY (objectID)
 );
+CREATE INDEX i_Objects_pointID ON Objects (pointID);
+CREATE INDEX i_Objects_deviceID ON Objects (deviceID);
+CREATE INDEX i_Objects_device_type_instance ON Objects (deviceID,type,instance);
+
 
 -- Log Data
 DROP TABLE IF EXISTS Log;
@@ -62,6 +71,8 @@ CREATE TABLE Log (
 	value real 							-- recorded value
 );
 CREATE INDEX i_Log_time ON Log (time);
+CREATE INDEX i_Log_objectID ON Log (objectID);
+
 
 -- Saftey/Enable table (BacLog)
 DROP TABLE IF EXISTS Watches;
