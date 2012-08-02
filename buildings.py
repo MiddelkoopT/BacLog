@@ -17,7 +17,7 @@ class Building:
         
     def check(self,instances):
         ## QC check 
-        for n in ['campus','building','unit','num','attr','index']:        
+        for n in ['campus','building','unit','num','attr']:        
             print "!%s" % n
             for i in instances.getTagNot(n):
                 print i,i.name
@@ -39,9 +39,17 @@ class Building:
             r=instances.getTags({'vav':vav,'application':True})
             if len(r)>1:
                 print "duplicate vav", r
+
+    def points(self,instances):
+        '''Remove all non-points information'''
+        for o in instances:
+            for t in o.tags.keys():
+                if t not in self.pointTags:
+                    del o.tags[t]
          
     ## Default methods
     replaceUnits=[]
+    pointTags=[]
     def _replace(self,instances):
         for s,r in self.replaceUnits:
             for o in instances:
@@ -96,6 +104,7 @@ class Test(Building):
 
 class PughHall(Building):
     ## Rename
+    campus='UF'
     replaceUnits=[
                   ## Series 1
                   ('ROOMTRO1A.VAV127','ROOMTRO2A.VAV124'), # (RV)
@@ -108,21 +117,19 @@ class PughHall(Building):
                   ('CHW.KILOTONS','CHW00-KILOTONS')
                    ]         
     
+    pointTags=['nn','campus','building','space','room','corridor','closet','unit','num','attr','index']
+    
     def _tag(self,instance):
         name=instance.name
+        instance.setTag('name',name)
         
         ## Campus and Building
         for r in re.finditer('^B(\d+)[\._:]', name):
-            instance.setTag('campus','UF')
-            instance.setTag('building',int(r.group(1)))
+            building=int(r.group(1))
+            instance.setTag('campus',self.campus)
+            instance.setTag('building',building)
+            nn=[self.campus,building]
             
-        ## Derive unit and attr/address from name
-        for r in re.finditer('^B\d+[\._]([A-Z\d_\.]+)([:-]([A-Z\d \._-]+))?$', name):
-            if r.group(2):
-                attr=string.lower(string.replace(r.group(3),'.','_'))
-                instance.setTag('attr',attr)
-                instance.setTag('property',r.group(3))
-
         ## Room (rooms can have letters in them!)
         for r in re.finditer('[\._]R(OO)?M(\d+\w*)[\._]', name):
             instance.setTag('space',r.group(2))
@@ -140,8 +147,17 @@ class PughHall(Building):
 
         ## Add material tag
         for r in re.finditer("[\._](%s)" % string.join(tags.keys(),'|'), name):
-            instance.setTag('unit',tags[r.group(1)])
-            instance.setTag('num',1)
+            unit=tags[r.group(1)]
+            instance.setTag('unit',unit)
+            nn.append(unit)
+
+        ## Derive unit and attr/address from name
+        for r in re.finditer('^B\d+[\._]([A-Z\d_\.]+)([:-]([A-Z\d \._-]+))?$', name):
+            if r.group(2):
+                attr=string.lower(string.replace(r.group(3),'.','_'))
+                instance.setTag('attr',attr)
+                instance.setTag('property',r.group(3))
+                nn.append(attr)
             
         ## AHU and other numbered units
         for r in re.finditer('[\._](AHU|VAV|VFD)(\d+)', name):
@@ -189,11 +205,10 @@ class PughHall(Building):
             vav=instance.getTag('vav')
             instance.setTag('zone',vav/100)
             
-        ## indexes (none for now)
-        instance.setTag('index',1)
-            
-        ## Normalized Name
-        nn=string.join((instance.getTag('campus'),str(instance.getTag('building')),
-                        instance.getTag('unit'),str(instance.getTag('num')),
-                        instance.getTag('attr'),str(instance.getTag('index'))),'.')
-        instance.setTag('nn',nn)
+        ## indexes (none for now) untested
+        #index=instance.hasTag('index',None)
+        #if index:
+        #    nn.append(instance.getTag)
+        
+        instance.setTag('nn',string.join(nn,'.'))
+

@@ -12,8 +12,8 @@ class Database:
     database='baclog'
     port=5434
 
-    def __init__(self):
-        self.db=psycopg2.connect(database=self.database,port=self.port)
+    def __init__(self,database=database,port=port):
+        self.db=psycopg2.connect(database=database,port=port)
         self.instance={}
         self.objectid={}
         
@@ -30,14 +30,14 @@ class Database:
         cur.close()
         return devices
     
-    def getObjects(self):
+    def getObjects(self,where="Devices.last IS NULL"):
         cur=self.db.cursor()
         cur.execute("""
-        SELECT objectid, device,type,instance ,Objects.name,Objects.description
+        SELECT objectid, Devices.device,type,instance ,Objects.name,Objects.description
         FROM Objects 
         JOIN Devices USING (deviceID) 
-        WHERE Devices.last IS NULL 
-        """)
+        WHERE %s 
+        """% where)
         objects=InstanceList()
         for r in cur:
             objectid,device,otype,oinstance,name,description=r
@@ -71,11 +71,24 @@ class Database:
     def writeTags(self,objects):
         cur=self.db.cursor()
         for o in objects:
-            print "Database.writeTags>", o
+            #print "Database.writeTags>", o
             cur.execute("DELETE FROM Tags WHERE objectID=%s", (o.id,))
             for tag,value in o.tags.items():
-                print "#", tag,value
+                #print "#", tag,value
                 cur.execute("INSERT INTO Tags (objectID,tag,value) VALUES (%s,%s,%s)", (o.id,tag,value))
+        cur.close()
+
+    def writePoints(self,objects):
+        cur=self.db.cursor()
+        for o in objects:
+            #print "Database.writePoints>", o
+            cur.execute("DELETE FROM Points WHERE pointID=%s", (o.id,))
+            campus=o.getTag('campus')
+            building=int(o.getTag('building'))
+            for tag,value in o.tags.items():
+                #print "#", tag,value
+                cur.execute("INSERT INTO Points (pointID,tag,value,active,campus,building) VALUES (%s,%s,%s,%s,%s,%s)",
+                            (o.id,tag,value,True,campus,building))
         cur.close()
 
     def enablePoints(self,objects):
@@ -100,6 +113,11 @@ class Database:
         print "Database.scheduleObject>", scheduleID, instance, value 
         return scheduleID
     
+    def execute(self,query):
+        cur=self.db.cursor()
+        cur.execute(query)
+        cur.close()
+        
     def now(self,offset=0):
         '''Return current ticks + offset'''
         return time.time()+offset

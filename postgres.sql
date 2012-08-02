@@ -1,5 +1,5 @@
 -- BacLog Copyright 2010-2012 by Timothy Middelkoop licensed under the Apache License 2.0
--- Database Schema v4
+-- Database Schema v5
 
 -- BACnet device at the time of use (IP devices)
 DROP TABLE IF EXISTS Devices;
@@ -19,32 +19,12 @@ CREATE INDEX i_Devices_device ON Devices (device);
 CREATE INDEX i_Devices_first ON Devices (first);
 CREATE INDEX i_Devices_last ON Devices (last);
 
-
--- Points.  Physical equipment maped to an object a point in time.
-DROP TABLE IF EXISTS Points;
-CREATE TABLE Points ( 
-	pointID SERIAL, 					-- Internal point ID
-	campus char(8),						-- Campus identifier
-	building integer, 					-- Building Number
-	first timestamp with time zone, 	-- first seen
-	last timestamp  with time zone, 	-- valid until (NULL indicates live point)
-	CONSTRAINT Points_PK PRIMARY KEY (pointID)
-);
-
-DROP TABLE IF EXISTS Tags;
-CREATE TABLE Tags (
-	objectID integer,
-	tag char(8),
-	value varchar,
-	CONSTRAINT Tags_PK PRIMARY KEY (objectID,tag)
-);
-
--- BACnet points at the time of use.
+-- BACnet points at the time of use (non-mutable)
 DROP TABLE IF EXISTS Objects;
 CREATE TABLE Objects (
 	objectID SERIAL, 					-- object ID - object definition (temporal)
 	deviceID integer, 					-- device ID - device definition (temporal)
-	pointID integer, 					-- point ID - physical point definition
+	device integer,						-- BACnet device
 	type integer, 						-- BACnet objectType
 	instance integer, 					-- BACnet objectInstance
 	name varchar,		      			-- BACnet objectName
@@ -53,10 +33,8 @@ CREATE TABLE Objects (
 	last timestamp  with time zone, 	-- last time seen (NULL indicates live object)
 	CONSTRAINT Objects_PK PRIMARY KEY (objectID)
 );
-CREATE INDEX i_Objects_pointID ON Objects (pointID);
 CREATE INDEX i_Objects_deviceID ON Objects (deviceID);
-CREATE INDEX i_Objects_device_type_instance ON Objects (deviceID,type,instance);
-
+CREATE INDEX i_Objects_device_type_instance ON Objects (device,type,instance);
 
 -- Log Data
 DROP TABLE IF EXISTS Log;
@@ -73,7 +51,6 @@ CREATE TABLE Log (
 CREATE INDEX i_Log_time ON Log (time);
 CREATE INDEX i_Log_objectID ON Log (objectID);
 
-
 -- Saftey/Enable table (BacLog)
 DROP TABLE IF EXISTS Watches;
 CREATE TABLE Watches (
@@ -86,6 +63,38 @@ CREATE TABLE Watches (
 	warning boolean,					-- Point is in warn range.
 	stopped boolean,					-- Point has errored out and point released.
 	CONSTRAINT Watches_PK PRIMARY KEY (objectID)
+);
+
+-- Metadata
+
+-- Points.  Physical equipment, current definition, physically non-mutable.
+DROP TABLE IF EXISTS Points;
+CREATE TABLE Points ( 
+	pointID integer, 					-- Internal point ID
+	tag char(8),
+	value varchar,
+	active boolean,						-- Is point currently active
+	campus char(8),						-- Campus identifier
+	building integer, 					-- Building Number
+	CONSTRAINT Points_PK PRIMARY KEY (pointID,tag)
+);
+
+-- Object to Point map, name is normalized name
+DROP TABLE IF EXISTS PointObjectMap;
+CREATE TABLE PointObjectMap (
+	pointID integer,
+	objectID integer,
+	name varchar,
+	CONSTRAINT PointObjectMap_PK PRIMARY KEY (pointID,objectID)
+);
+
+-- Tags
+DROP TABLE IF EXISTS Tags;
+CREATE TABLE Tags (
+	objectID integer,
+	tag char(8),
+	value varchar,
+	CONSTRAINT Tags_PK PRIMARY KEY (objectID,tag)
 );
 
 
