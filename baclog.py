@@ -96,10 +96,10 @@ class FindObjects(Task):
         ioObjectTypes=[
                        bacnet.ObjectType.analogInput,  #@UndefinedVariable
                        bacnet.ObjectType.analogOutput, #@UndefinedVariable
-                       #bacnet.ObjectType.analogValue,  #@UndefinedVariable
+                       bacnet.ObjectType.analogValue,  #@UndefinedVariable
                        bacnet.ObjectType.binaryInput,  #@UndefinedVariable
                        bacnet.ObjectType.binaryOutput, #@UndefinedVariable
-                       #bacnet.ObjectType.binaryValue,  #@UndefinedVariable
+                       bacnet.ObjectType.binaryValue,  #@UndefinedVariable
                        ]
 
         for target in self.devices:
@@ -132,7 +132,7 @@ class FindObjects(Task):
                 response=yield Message(target.address,bacnet.ReadProperty('description',o))
                 description=response.message.value._value
                 if debug: print "FindObjects> name:", name, description
-                response=yield database.Object(deviceID,o.type,o.instance,name,description)
+                response=yield database.Object(deviceID,target.device,o.type,o.instance,name,description)
                 objectID,=response.pop()
                 o=Object(deviceID,objectID,o.type,o.instance,name)
                 target.objects.append(o)
@@ -164,7 +164,7 @@ class Scheduler(scheduler.Task):
         self.dbs=dbs
         self.deviceid=deviceid
         self.objectid=objectid
-        self.priority=13
+        self.priority=16
 
     def run(self):
         priority=self.priority
@@ -275,9 +275,11 @@ class BacLog:
         self.scheduler=scheduler.init()
         self.mh=message.MessageHandler(bind,port)
         self.scheduler.addHandler(self.mh)
-        self.dbh=database.DatabaseHandler(port=config.getint('Database','baclogPort'))
+        self.dbh=database.DatabaseHandler(port=config.getint('Database','baclogPort'),
+                                          database=config.get('Database','baclogDB'))
         self.scheduler.addHandler(self.dbh)
-        self.dbs=database.DatabaseHandler(port=config.getint('Database','bacsetPort'),database='bacset')
+        self.dbs=database.DatabaseHandler(port=config.getint('Database','bacsetPort'),
+                                          database=config.get('Database','bacsetDB'))
         self.scheduler.addHandler(self.dbs)
         
     def run(self):

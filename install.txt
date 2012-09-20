@@ -54,7 +54,7 @@ git svn init -s --prefix=svn/ https://webdss.ise.ufl.edu/svn/projects/BacLog
 git svn fetch
 
 git branch -r
-git checkout -b testing svn/mtim-baclog-pughhall-v1
+git checkout -b production-v4 svn/mtim-baclog-pughhall-v4
 
 ## R/Eclipse/
 sudo apt-get install r-cran-rjava

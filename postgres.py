@@ -203,15 +203,23 @@ class Log(Query):
         Query.__init__(self,query, stamp,IP,port,otype,oinstance,value,status,objectID)
 
 class Object(Query):
-    def __init__(self,deviceID,otype,oinstance,name,description=None,pointID=None):
-        query="INSERT INTO Objects (first,deviceID,type,instance,name,description,pointID) VALUES (%s,%s,%s,%s,%s,%s,%s)  RETURNING objectID;"
+    def __init__(self,deviceID,device,otype,oinstance,name,description=None):
+        # FIXME: This does not handle multiple networks
+        query="""
+UPDATE Objects SET last=%s WHERE last IS NULL AND device=%s AND type=%s AND instance=%s;
+INSERT INTO Objects (first,deviceID,device,type,instance,name,description)
+  VALUES (%s,%s,%s,%s,%s,%s,%s)
+  RETURNING objectID;
+    """
         now=psycopg2.TimestampFromTicks(time.time())
-        Query.__init__(self,query, now,deviceID,otype,oinstance,name,description,pointID)
+        Query.__init__(self,query,
+                       now,device,otype,oinstance,
+                       now,deviceID,device,otype,oinstance,name,description)
 
 class Device(Query):
     def __init__(self,IP,port,device,name):
         query="""
-UPDATE Devices SET last=%s WHERE IP=%s AND port=%s AND device=%s;
+UPDATE Devices SET last=%s WHERE last IS NULL AND IP=%s AND port=%s AND device=%s;
 INSERT INTO Devices (first,IP,port,device,name) VALUES (%s,%s,%s,%s,%s)
   RETURNING deviceID;
         """

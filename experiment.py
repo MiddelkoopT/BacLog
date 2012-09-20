@@ -8,6 +8,19 @@ import buildings
 debug=True
 trace=False
 
+class Virtual:
+    def runTest(self):
+        print "Virtual.runTest>"
+        db=Database("baclog",5432)
+        db.getObjects()
+        av1=db.instance[(9001,2,0)] ## hard coded AV1
+        print av1
+        db.enablePoints([av1])
+        t=db.now()
+        db.scheduleObject(av1, t+1 , 30, 10)
+
+        db.close()
+
 
 class Experiment:
 
@@ -90,4 +103,4 @@ class Experiment:
 
 ## entry point
 if __name__=='__main__':
-    Experiment().runTest()
+    Virtual().runTest()

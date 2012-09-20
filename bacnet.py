@@ -284,10 +284,10 @@ PropertyMap={
 PropertyTypeMap={
                  0: Float,       # analogInput
                  1: Float,       # analogOutput
-                 2: None,        # analogValue
+                 2: Float,       # analogValue
                  3: BinaryPV,    # binaryInput
                  4: BinaryPV,    # binaryOutput
-                 5: None,        # binaryValue
+                 5: BinaryPV,    # binaryValue
                  }
 
 

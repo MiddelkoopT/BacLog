@@ -27,7 +27,7 @@ class Instance:
     def __repr__(self):
         output=["<%s,%s,%s" % (self.device,self.otype,self.oinstance)]
 
-        if self.name is not None:
+        if self.name is not None and self.tags is not None:
             output.append("|%s.%s.%s.%s" % (self.tags.get('unit'),
                                             self.tags.get('num'),
                                             self.tags.get('attr'),
