@@ -1,5 +1,5 @@
 -- BacLog Copyright 2010-2012 by Timothy Middelkoop licensed under the Apache License 2.0
--- Database Schema v5
+-- Database Schema v6
 
 -- BACnet device at the time of use (IP devices)
 DROP TABLE IF EXISTS Devices;
@@ -67,25 +67,25 @@ CREATE TABLE Watches (
 
 -- Metadata
 
--- Points.  Physical equipment, current definition, physically non-mutable.
-DROP TABLE IF EXISTS Points;
-CREATE TABLE Points ( 
-	pointID integer, 					-- Internal point ID
+-- Element.  Physical equipment, current definition, physically non-mutable.
+DROP TABLE IF EXISTS Elements;
+CREATE TABLE Elements ( 
+	elementID integer, 					-- Internal element ID
 	tag char(8),
 	value varchar,
-	active boolean,						-- Is point currently active
+	active boolean,						-- Is element currently active
 	campus char(8),						-- Campus identifier
 	building integer, 					-- Building Number
-	CONSTRAINT Points_PK PRIMARY KEY (pointID,tag)
+	CONSTRAINT Elements_PK PRIMARY KEY (elementID,tag)
 );
 
--- Object to Point map, name is normalized name
-DROP TABLE IF EXISTS PointObjectMap;
-CREATE TABLE PointObjectMap (
-	pointID integer,
+-- Object to Element map, name is normalized name
+DROP TABLE IF EXISTS ElementObjectMap;
+CREATE TABLE ElementObjectMap (
+	elementID integer,
 	objectID integer,
 	name varchar,
-	CONSTRAINT PointObjectMap_PK PRIMARY KEY (pointID,objectID)
+	CONSTRAINT ElementObjectMap_PK PRIMARY KEY (elementID,objectID)
 );
 
 -- Tags
@@ -119,7 +119,7 @@ CREATE TABLE Control (
 	objectID integer,					-- object to be controled
 	active timestamp with time zone,	-- control start
 	until timestamp with time zone,		-- control end
-	value integer,						-- control value
+	value real,						-- control value
 	enable boolean,						-- control active
 	disable boolean,					-- control overriden or released
 	CONSTRAINT Control_PK PRIMARY KEY (scheduleID)
