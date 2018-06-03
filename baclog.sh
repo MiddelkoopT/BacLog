@@ -1,9 +1,9 @@
-#!/bin/zsh
+#!/bin/bash
 
 PYTHON=python
 
-while /bin/true ; do 
- ((run+=1))
- sleep 1
- ${PYTHON} baclog.py >&! nohup.out.$run
+install -d log
+while sleep 1 ; do 
+  ((run+=1))
+  ${PYTHON} baclog.py &> log/baclog.${run}.log
 done
