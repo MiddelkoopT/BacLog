@@ -3,7 +3,7 @@ BacLog Server
 
 An asynchronous BACnet logger written in Python.
 
-Copyright 2010-2013 by Timothy Middelkoop.
+Copyright 2010-2013,2018 by Timothy Middelkoop.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
