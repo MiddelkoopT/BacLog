@@ -4,3 +4,4 @@
 *.prof
 local.ini
 nohup.out
+/log/
