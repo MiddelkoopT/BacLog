@@ -25,7 +25,8 @@ createdb baclog
 psql baclog < postgres.sql
 ```
 
-Create or symlink a `local.ini` configuration file then run server/client.
+Create or symlink a `local.ini` configuration file then run server/client. Things to note
+ * You will need to allocate a site device number for the server.
 
 ```
 python baclog.py &
