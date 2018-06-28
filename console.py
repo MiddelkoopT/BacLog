@@ -17,6 +17,9 @@ class Database:
         devices=string.split(self.config.get(self.database,'devices'),',')
         database=[]
         for d in devices:
+            print "console.Database.getDevices>", d
+            if d=='':
+                continue
             address,instance=d.split('!')
             device=Device(address,self.port,int(instance))
             database.append(device)
