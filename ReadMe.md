@@ -1,5 +1,4 @@
-BacLog Server
-=============
+# BacLog Server
 
 An asynchronous BACnet logger written in Python.
 
@@ -17,6 +16,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-WARNING! This experimental research code is incomplete and interacts with real hardware, and such, should only be used by experienced professionals familiar with BACnet and HVAC systems in a controlled setting. Always follow proper safety procedures.  
+WARNING! This experimental research code is incomplete and interacts
+with real hardware, and such, should only be used by experienced
+professionals familiar with BACnet and HVAC systems in a controlled
+setting. Always follow proper safety procedures.
 
-Much of this code may be site/device specific and only implements a portion of the BACnet protocol.  This system has collected over 2.5 billions samples from 20,000 points from a single building over a period of two years. If you use the software please let the authors know and contribute your work back.
+Much of this code may be site/device specific and only implements a
+portion of the BACnet protocol.  This system has collected over 2.5
+billions samples from 20,000 points from a single building over a
+period of two years. If you use the software please let the authors
+know and contribute your work back.
