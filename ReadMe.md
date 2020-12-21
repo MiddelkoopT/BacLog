@@ -4,6 +4,8 @@ An asynchronous BACnet logger written in Python.
 
 Copyright 2010-2013,2018 by Timothy Middelkoop.
 
+DOI: 10.5281/zenodo.4383205
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
